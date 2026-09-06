@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: sosh_dev
+      POSTGRES_USER: sosh
+      POSTGRES_PASSWORD: sosh_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sosh:sosh_dev_password@postgres:5432/sosh_dev
+      REDIS_URL: redis://redis:6379
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
+      R2_SECRET_KEY: ${R2_SECRET_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-sosh-media}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN}
+      VOTING_WINDOW_HOURS: ${VOTING_WINDOW_HOURS:-2}
+      ENVIRONMENT: development
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./api:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./api
+    command: rq worker --with-scheduler sosh
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sosh:sosh_dev_password@postgres:5432/sosh_dev
+      REDIS_URL: redis://redis:6379
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN}
+      VOTING_WINDOW_HOURS: ${VOTING_WINDOW_HOURS:-2}
+      ENVIRONMENT: development
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./api:/app
+
+  rq_dashboard:
+    image: eoranged/rq-dashboard
+    ports:
+      - "9181:9181"
+    environment:
+      RQ_DASHBOARD_REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+
+# ml_service added in Phase 2 when Vibe-Cluster ML is ready
