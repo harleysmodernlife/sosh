@@ -1,6 +1,6 @@
 # Sösh — Technology Stack
-**Version:** 0.1
-**Status:** Decided — subject to revision at scale milestones
+**Version:** 0.2
+**Status:** Decided — revised for zero-cost development and early operation
 **Depends on:** DESIGN.md v0.1, FLOWS.md v0.1, SCHEMA.md v0.1
 **Last Updated:** 2026-09-06
 
@@ -8,105 +8,108 @@
 
 ## The Principle
 
-The schema confirmed five hard requirements. The stack serves those requirements. Every choice below is a direct response to a technical constraint from SCHEMA.md, not a preference or trend.
+The stack serves two constraints: the hard technical requirements from SCHEMA.md, and the hard financial requirement of $0/month until the product is earning.
+
+This is a **phased stack**. Phase 1 (development through early users) runs entirely on free tiers. Phase 2 (post-revenue scale) upgrades individual services as needed. Nothing in Phase 1 requires rewriting to reach Phase 2 — only connection strings and hosting configs change.
+
+**The rule:** No paid service until the free tier is genuinely exhausted or until the product is generating revenue. Every dollar spent before first revenue is a dollar that has to come out of your pocket.
 
 This stack is optimized for a **solo developer with AI assistance** running guerilla development. It prioritizes:
+- Free tiers first, paid upgrades only when earned
 - Managed services over self-managed infrastructure (less ops burden)
 - Python and TypeScript (languages already in use across the project)
-- Free/cheap tiers early, scalable paths later
 - Tools with excellent documentation and large communities (better AI code generation support)
+
+### What it costs to start
+
+| Milestone | Cost |
+|---|---|
+| Development and local testing | $0/month |
+| Founding Wave (up to ~500 users) | $0/month |
+| App Store submission (when ready) | $99 Apple (annual) + $25 Google (one-time) |
+| Operating at ~10,000 MAU | $0–15/month |
+| First cost that scales dangerously | Stripe Identity at $1.50/verification — deferred until post-revenue |
+
+**Revenue comes before meaningful cost.** Brand partnerships are sold after you have real user data, not before. Build first, prove the loop, then sell.
 
 ---
 
 ## Quick Reference
 
-| Layer | Choice | Why |
-|---|---|---|
-| Mobile app | React Native + Expo | TypeScript, device APIs simplified, cross-platform |
-| Main API | FastAPI (Python) | Async-native, WebSocket built-in, Python experience |
-| ML service | FastAPI (Python) | Same language as API, separate process, async job queue |
-| Job queue | RQ (Redis Queue) | Simple, Python, uses the Redis already required |
-| Relational DB | PostgreSQL + PostGIS | Hard requirement from schema |
-| Cache + realtime state | Redis | Hard requirement from schema |
-| DB hosting | Supabase | Managed PostgreSQL + PostGIS + Auth, generous free tier |
-| Redis hosting | Upstash | Serverless Redis, free tier, REST + Redis protocol |
-| API hosting | Railway | Python deployment, connects to Supabase and Upstash |
-| Media storage | Cloudflare R2 | S3-compatible, no egress fees, CDN included |
-| Push notifications | Expo Push + FCM/APNs | One API call, handles both platforms |
-| Auth | Supabase Auth | Integrated with Supabase DB, JWT, handles sessions |
-| Age verification | Stripe Identity | Well-documented, easy to integrate |
-| On-device filter | TensorFlow Lite + MediaPipe | Cross-platform, handles pose + content classification |
+| Layer | Choice | Cost | Why |
+|---|---|---|---|
+| Mobile app | React Native + Expo | $0 | TypeScript, device APIs simplified, cross-platform |
+| Mobile testing | Expo Go on device | $0 | No developer account needed until App Store submission |
+| Main API | FastAPI (Python) | $0 | Async-native, Python experience |
+| API hosting | Fly.io free tier | $0 | 3 VMs, no sleep, no credit card required |
+| Job queue | RQ (Redis Queue) | $0 | Simple, Python, uses Redis already on Fly.io |
+| Relational DB | PostgreSQL + PostGIS | $0 | Hard requirement from schema |
+| DB hosting | Supabase free tier | $0 | 500MB DB, 50k MAU, PostGIS, Auth included |
+| Redis | Redis on Fly.io VM | $0 | Bundled in existing free Fly.io VM |
+| Media storage | Cloudflare R2 free tier | $0 | 10GB storage, no egress fees, CDN included |
+| Push notifications | Expo Push + FCM/APNs | $0 | One API call, handles both platforms |
+| Auth | Supabase Auth | $0 | Integrated with Supabase DB, JWT, sessions |
+| Real-time leaderboard | HTTP polling (MVP) | $0 | Every 5s during Pulse window — no WebSocket complexity until needed |
+| ML service | **DEFERRED — Phase 2** | $0 | Not needed for Pulse-only MVP |
+| Age verification | **DEFERRED — Phase 2** | $0 | DMs are post-MVP. $1.50/user cost deferred until post-revenue |
+| On-device filter | **DEFERRED — Phase 2** | $0 | Basic text moderation in API for MVP |
 
 ---
 
 ## Architecture Overview
 
 ```
+PHASE 1 ARCHITECTURE (free tier — MVP through early users)
+
 ┌──────────────────────────────────────────────────────────────────────┐
 │  MOBILE (React Native + Expo)                                        │
 │                                                                      │
-│  ┌─────────────────┐  ┌────────────────┐  ┌───────────────────────┐ │
-│  │  On-device ML   │  │  Expo Camera   │  │  Expo Notifications   │ │
-│  │  TFLite +       │  │  (in-app       │  │  (Pulse trigger,      │ │
-│  │  MediaPipe      │  │  capture only) │  │  Tide-Rider alerts)   │ │
-│  └────────┬────────┘  └───────┬────────┘  └──────────┬────────────┘ │
-│           │                  │                       │              │
-└───────────┼──────────────────┼───────────────────────┼──────────────┘
-            │                  │                       │
-            ▼                  ▼                       ▼
+│  ┌────────────────┐  ┌───────────────────────────────────────────┐  │
+│  │  Expo Camera   │  │  Expo Notifications                       │  │
+│  │  (in-app       │  │  (Pulse trigger, Tide-Rider alerts)       │  │
+│  │  capture only) │  │                                           │  │
+│  └───────┬────────┘  └──────────────────────┬────────────────────┘  │
+│          │                                  │                       │
+└──────────┼──────────────────────────────────┼───────────────────────┘
+           │                                  │
+           ▼                                  ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  MAIN API (FastAPI / Python)  — Railway                              │
+│  MAIN API (FastAPI / Python) — Fly.io free tier                      │
 │                                                                      │
 │  ┌────────────────────┐   ┌──────────────────────────────────────┐  │
-│  │  HTTP REST         │   │  WebSocket Server                    │  │
-│  │  endpoints         │   │  - Pulse leaderboard stream          │  │
-│  │                    │   │  - Pressure Gauge updates            │  │
-│  │                    │   │  - Active Pulse feed                 │  │
-│  └────────┬───────────┘   └──────────────┬───────────────────────┘  │
-│           │                              │                          │
-└───────────┼──────────────────────────────┼──────────────────────────┘
-            │                              │
-     ┌──────┴──────┐               ┌───────┴──────┐
-     ▼             ▼               ▼              ▼
-┌─────────┐  ┌──────────┐   ┌───────────┐  ┌──────────────────────┐
-│ Supabase│  │  Upstash │   │  Upstash  │  │  Redis Pub/Sub       │
-│ Postgres│  │  Redis   │   │  Redis    │  │  (WebSocket          │
-│ PostGIS │  │  (sorted │   │  (rate    │  │   broadcast to       │
-│         │  │  sets,   │   │   limits, │  │   multiple API       │
-│         │  │  leaderb.)  │   Pressure │  │   instances)         │
-└─────────┘  └──────────┘   │  Gauge)   │  └──────────────────────┘
-                             └───────────┘
+│  │  HTTP REST         │   │  HTTP polling endpoint               │  │
+│  │  endpoints         │   │  GET /pulse/{id}/leaderboard         │  │
+│  │                    │   │  (mobile polls every 5s during       │  │
+│  │                    │   │  Pulse window — no WebSocket yet)    │  │
+│  └────────┬───────────┘   └──────────────────────────────────────┘  │
+│           │                                                         │
+└───────────┼─────────────────────────────────────────────────────────┘
             │
-            ▼
+     ┌──────┴──────────────────┐
+     ▼                         ▼
+┌─────────────────┐   ┌────────────────────────────────┐
+│ Supabase        │   │  Fly.io VM #2                  │
+│ PostgreSQL      │   │  Redis (bundled, no extra cost) │
+│ PostGIS         │   │  + RQ worker process           │
+│ Supabase Auth   │   └────────────────────────────────┘
+│ (free tier)     │
+└─────────────────┘
+
 ┌──────────────────────────────────────────────────────────────────────┐
-│  JOB QUEUE (RQ Workers / Python) — Railway                           │
-│                                                                      │
-│  Jobs: vote_flush, leaderboard_resolve, mosaic_generate,             │
-│        heat_decay, seed_check, sosh_score_refresh,                   │
-│        synchlink_expire, pioneer_decay, tide_rider_evaluate          │
-│                                                                      │
-└────────────────────────────┬─────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  ML SERVICE (FastAPI / Python) — Railway                             │
-│                                                                      │
-│  - Vibe-Snap triangulation pipeline                                  │
-│  - Cluster assignment + confidence scoring                           │
-│  - Seed similarity detection                                         │
-│  - Synch-Link energy signature comparison                            │
-│  - Narrative Arc Engine (Mosaic generation)                          │
-│                                                                      │
+│  MEDIA (Cloudflare R2 free tier)                                     │
+│  10GB storage, 1M writes/month, zero egress fees, CDN included       │
 └──────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────┐
-│  MEDIA (Cloudflare R2 + CDN)                                         │
-│  - All video, photo uploads from Pulse entries and Vibe-Snaps        │
-│  - On-demand transcoding via Cloudflare Stream (future phase)        │
+│  PUSH (Expo Push → FCM + APNs) — free                                │
 └──────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────┐
-│  PUSH (Expo Push Notification Service → FCM + APNs)                  │
+│  DEFERRED TO PHASE 2                                                 │
+│  - ML service (Vibe-Cluster triangulation)                           │
+│  - WebSockets (replace polling at scale)                             │
+│  - Age verification / Stripe Identity                                │
+│  - On-device content filter (basic API-side moderation in MVP)       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -164,21 +167,24 @@ A single API instance can serve WebSocket connections directly. When the API sca
 
 ---
 
-### ML Service — FastAPI (Python, separate process)
+### ML Service — DEFERRED (Phase 2)
 
-The triangulation pipeline is computationally expensive (vision model inference, embedding comparisons, clustering). It cannot run in the main API without blocking request handling.
+The ML triangulation pipeline is computationally expensive and is not needed for the Pulse-only MVP.
 
-**Architecture:** Separate FastAPI service, same Railway project. The main API enqueues jobs to RQ; the ML service workers consume them.
+**What the MVP does instead:**
+- Vibe-Clusters are seeded manually with 5-10 starter clusters (time-of-day based: "Morning," "Mid-Day," "Late Night," etc.)
+- VibeSnap cluster assignment uses simple rules: time of day + GPS location type from device metadata
+- This is intentionally dumb. It works well enough to test the Tide-Riding mechanic and feed experience before investing in ML
 
-**Libraries:**
-- `mediapipe` — pose estimation, scene classification
-- `sentence-transformers` — content embeddings for Synch-Link similarity
-- `scikit-learn` — clustering, similarity scoring
-- `Pillow` / `opencv-python` — image preprocessing
-- `numpy` — vector operations
+**When to build the ML service:**
+When the Vibe-Cluster feed is shipping and manual cluster rules are clearly insufficient. At that point, start with Google Vision API free tier (1,000 units/month) for basic image labeling before building the full triangulation pipeline.
 
-**Note on model hosting:**
-Initial ML models (pose estimation, content filter) are included in the service container. As models grow, consider Hugging Face model hub or a dedicated model store. Do not hard-code model weights in the codebase — load from a configurable path.
+**Phase 2 stack (when ML service is needed):**
+- Separate FastAPI Python service on Fly.io
+- `mediapipe` for pose estimation
+- `sentence-transformers` for content embeddings
+- `scikit-learn` for clustering
+- `Pillow` / `opencv-python` for image preprocessing
 
 ---
 
@@ -194,7 +200,7 @@ Celery is the industry standard but has significantly more configuration complex
 **Why not a serverless queue (AWS SQS, etc.):**
 Unnecessary complexity at this stage. The Redis instance is already required. Use it.
 
-**Worker deployment:** RQ workers run as separate Railway processes in the same project as the API.
+**Worker deployment:** RQ worker runs as a second process on Fly.io VM #2 (alongside Redis). Same free VM, two processes. At small scale this is fine. At scale, the worker gets its own VM.
 
 ---
 
@@ -220,22 +226,20 @@ Supabase supports SQL migration files via the Supabase CLI. The schema from SCHE
 
 ---
 
-### Cache and Realtime State — Upstash Redis
+### Cache and Realtime State — Redis on Fly.io
 
-**Why Upstash:**
-Upstash is serverless Redis — you pay per request, not per hour. For early-stage development and low-traffic periods, this is dramatically cheaper than a dedicated Redis instance. It supports both the Redis protocol (for standard Redis clients like `redis-py`) and a REST API.
+Redis runs on Fly.io VM #2 alongside the RQ worker. No separate service, no extra cost. The Fly.io free tier includes 3 shared VMs — VM #1 runs the API, VM #2 runs Redis + RQ worker, VM #3 is available if needed.
 
-When traffic scales beyond Upstash's economical range, migrating to a dedicated Redis instance (Railway Redis, AWS ElastiCache) requires changing only the connection string — no code changes.
-
-**What lives in Upstash:**
+**What lives in Redis:**
 All Redis keys defined in SCHEMA.md:
 - Pulse leaderboard sorted sets
 - Pressure Gauge float
-- Vibe-Cluster heat floats
+- Vibe-Cluster heat floats (Phase 2)
 - Rate limiting counters
 - Session state
-- Seed similarity buckets
 - RQ job queue
+
+**When to upgrade:** When the Fly.io VM's 256MB RAM is insufficient for Redis data size, move Redis to a dedicated Fly.io volume or Upstash pay-as-you-go. This requires only a `REDIS_URL` change.
 
 ---
 
@@ -287,25 +291,19 @@ The mobile app uses `supabase-js` (or `supabase-flutter` if needed). The FastAPI
 
 ---
 
-### Age Verification — Stripe Identity
+### Age Verification — DEFERRED (Phase 2)
 
-Stripe Identity provides government ID verification with a mature SDK, clear pricing, and strong documentation. It does not store raw document data in Sösh systems — the result (verified/not-verified, over-18/under-18) is a webhook payload. The `verification_statuses` table stores only these boolean results.
+Stripe Identity costs $1.50 per verification. DMs (the only feature requiring age verification) are post-MVP. Do not build or pay for this until DMs are on the roadmap.
 
-**Integration flow:**
-1. User initiates verification in app settings
-2. API calls Stripe Identity to create a verification session
-3. Mobile app opens Stripe Identity SDK (built-in UI)
-4. User completes ID scan within Stripe's SDK
-5. Stripe sends webhook to API with result
-6. API updates `verification_statuses` table
+**MVP approach:** The Synch-Link Shared Space (emoji reactions only) requires no verification. It is safe for all ages by design. This is sufficient for the Pulse-only MVP and the Vibe-Cluster phase.
 
-**Note:** Stripe Identity has limitations in some countries. For global coverage, evaluate Sumsub as an alternative or supplement after launch. Do not block the build on this decision — implement Stripe Identity first.
+**When to build:** When DM unlocking is ready to ship. At that point, implement Stripe Identity for US users, evaluate Sumsub for global coverage. The `verification_statuses` table in the schema is already designed for this — no schema changes needed when the time comes.
 
 ---
 
 ## Local Development Environment
 
-All services run locally via Docker Compose. This is the only approved local dev setup — do not run services manually outside of Docker.
+All services run locally via Docker Compose. This mirrors the Fly.io production setup exactly — same services, same environment variables, no surprises when deploying.
 
 ### docker-compose.yml structure
 
@@ -342,17 +340,6 @@ services:
       - postgres
       - redis
 
-  ml_service:
-    build: ./ml_service
-    ports:
-      - "8001:8001"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://sosh:sosh_dev_password@postgres:5432/sosh_dev
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - postgres
-      - redis
-
   worker:
     build: ./api
     command: rq worker --with-scheduler
@@ -374,6 +361,8 @@ services:
 
 volumes:
   postgres_data:
+
+# ml_service added in Phase 2 when Vibe-Cluster ML is ready
 ```
 
 ### Repository structure
@@ -386,71 +375,68 @@ sosh/
   STACK.md
   docker-compose.yml
   .env.example
-  .env               (gitignored — never commit this)
-  api/               (FastAPI main API)
+  .env                   (gitignored — never commit this)
+  api/                   (FastAPI main API — Phase 1)
     Dockerfile
+    fly.toml             (Fly.io deployment config)
     requirements.txt
     main.py
     routers/
     models/
     services/
-    workers/          (RQ job definitions)
-  ml_service/        (FastAPI ML service)
-    Dockerfile
-    requirements.txt
-    main.py
-    pipelines/
-    models/           (ML model weights — gitignored, loaded from storage)
-  mobile/            (React Native + Expo)
+    workers/             (RQ job definitions)
+  mobile/                (React Native + Expo)
     package.json
     app.json
     app/
     components/
     hooks/
     services/
-  migrations/        (SQL migration files for Supabase CLI)
+  migrations/            (SQL migration files for Supabase CLI)
     0001_initial_schema.sql
+  # ml_service/ added in Phase 2
 ```
 
 ---
 
 ## Production Deployment
 
-### Early stage (0 to ~50,000 users)
+### Phase 1 — Free tier (development through ~10,000 MAU)
 
-All services on Railway. One project, multiple services.
+| Service | Where | Cost |
+|---|---|---|
+| Main API | Fly.io VM #1 (shared-cpu-1x, 256MB) | $0 |
+| Redis + RQ Worker | Fly.io VM #2 (shared-cpu-1x, 256MB) | $0 |
+| PostgreSQL + Auth | Supabase free tier | $0 |
+| Media | Cloudflare R2 free tier | $0 |
+| Push notifications | Expo Push + FCM/APNs | $0 |
+| Mobile testing | Expo Go on device | $0 |
+| **Total** | | **$0/month** |
 
-| Service | Railway config |
-|---|---|
-| Main API | Python service, `api/` directory, auto-deploy on push to main |
-| ML Service | Python service, `ml_service/` directory |
-| RQ Worker | Python service, `api/` directory, command: `rq worker --with-scheduler` |
-| PostgreSQL | Supabase (external, not Railway) |
-| Redis | Upstash (external, not Railway) |
-| Media | Cloudflare R2 (external) |
+**Fly.io deployment** is via `flyctl deploy` from the `api/` directory. The `fly.toml` config file in the repo handles the rest. Auto-deploy from GitHub via Fly.io's GitHub Action.
 
-Monthly cost estimate (early stage, ~10,000 MAU):
-- Railway: ~$20/month (Hobby plan, covers API + ML service + worker)
-- Supabase: $0 (free tier)
-- Upstash: $0 (free tier, ~10k daily requests)
-- Cloudflare R2: $0 (free tier: 10GB storage, 1M Class A operations)
-- Expo EAS: $0 (free tier)
-- Total: ~$20/month
+**App Store submission** (when ready, not before):
+- Apple Developer Account: $99/year
+- Google Play: $25 one-time
 
-### Scale milestones and what changes
+### Phase 2 — Post-revenue upgrades (pay only when earning)
 
-| Milestone | What changes |
-|---|---|
-| 50k MAU | Upgrade Supabase to Pro ($25/month), upgrade Upstash to pay-as-you-go |
-| 100k MAU | Add read replicas for PostgreSQL, dedicated Redis (Railway or AWS) |
-| 500k MAU | Move to AWS RDS + ElastiCache, add API horizontal scaling, CDN tuning |
-| 1M+ MAU | Full AWS/GCP infrastructure review — this is a good problem to have |
+| Milestone | What changes | New cost |
+|---|---|---|
+| App Store submission | Apple + Google accounts | +$124 one-time |
+| Fly.io VM RAM insufficient | Upgrade to performance-1x VMs | +$15-30/month |
+| Supabase free tier cap (~50k MAU) | Upgrade to Supabase Pro | +$25/month |
+| Redis fills 256MB | Dedicated Redis volume on Fly.io | +$2-5/month |
+| DMs feature ships | Stripe Identity, $1.50/verification | Variable |
+| ML service needed | New Fly.io VM for ML service | +$7-15/month |
+| WebSocket scale needed | Replace polling with WebSocket server | Code change only |
+| 500k+ MAU | AWS RDS + ElastiCache migration | Significant — revisit at that point |
 
 ---
 
 ## Environment Variables
 
-Every secret is in `.env` locally and in Railway's environment variable settings in production. `.env` is gitignored. A `.env.example` file documents all required variables without values.
+Every secret is in `.env` locally and in Fly.io's secret store in production (`flyctl secrets set KEY=value`). `.env` is gitignored. A `.env.example` file documents all required variables without values.
 
 ```bash
 # .env.example
@@ -463,34 +449,34 @@ SUPABASE_JWT_SECRET=
 
 # Database (direct connection for migrations, async for API)
 DATABASE_URL=postgresql+asyncpg://...
-DATABASE_URL_SYNC=postgresql://...   # for Alembic migrations
+DATABASE_URL_SYNC=postgresql://...   # for Supabase CLI migrations
 
-# Redis (Upstash in production, localhost in development)
-REDIS_URL=
+# Redis
+REDIS_URL=redis://localhost:6379     # local dev
+# REDIS_URL=redis://redis-vm:6379    # Fly.io production (internal network)
 
 # Cloudflare R2
 R2_ACCESS_KEY=
 R2_SECRET_KEY=
-R2_ENDPOINT=                          # https://{account_id}.r2.cloudflarestorage.com
+R2_ENDPOINT=                         # https://{account_id}.r2.cloudflarestorage.com
 R2_BUCKET_NAME=sosh-media
-
-# Stripe Identity
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
 
 # Expo Push Notifications
 EXPO_ACCESS_TOKEN=
 
 # App config (tuning parameters from Open Questions F1-F8)
+# These are env vars, not hardcoded — adjust without a code deploy
 SYNCH_LINK_SIMILARITY_THRESHOLD=0.75
 SEED_CRITICAL_MASS=50
 VIBE_SNAP_DAILY_LIMIT=20
 VOTING_WINDOW_HOURS=2
 PARALLEL_ECHO_MIN_EVENTS=1
 HEAT_DECAY_HALF_LIFE_HOURS=6
-```
 
-**Note on the config section:** The tuning parameters (F1-F8 baselines) are environment variables, not hardcoded constants. This allows adjusting them without a code deploy.
+# Phase 2 only — do not add until features are ready to ship
+# STRIPE_SECRET_KEY=
+# STRIPE_WEBHOOK_SECRET=
+```
 
 ---
 
@@ -498,15 +484,18 @@ HEAT_DECAY_HALF_LIFE_HOURS=6
 
 | Tool | Why not |
 |---|---|
-| AWS directly (early stage) | Too much configuration overhead for guerilla development. Supabase + Upstash + Cloudflare R2 + Railway gives equivalent capability with a fraction of the setup time. |
-| GraphQL | REST + WebSocket is simpler to build and debug. GraphQL's flexibility is not needed for a defined, known schema. Adds complexity without benefit at this stage. |
-| Kubernetes | Not until scale requires it. Railway handles orchestration at this stage. |
-| Microservices beyond 3 | API, ML service, and workers. Splitting further creates coordination overhead that kills guerilla development velocity. |
-| MongoDB or other NoSQL | PostgreSQL handles the relational and JSONB needs. Introducing a second database type adds operational burden. |
-| Socket.io | FastAPI's native WebSocket support is sufficient. Socket.io adds a dependency and namespace complexity that is not needed. |
-| Celery (initially) | RQ is sufficient for the job queue. Celery when RQ's limits are reached. |
-| Next.js or web frontend | Mobile-first. No web frontend in the initial build. Web is a future phase decision. |
+| Railway | $5/month minimum even on Hobby plan. Fly.io free tier covers the same workload at $0. Switch to Railway only if Fly.io proves insufficient. |
+| Upstash Redis | 10k commands/day free limit is too low for even a small Pulse event. Redis bundled on Fly.io VM is unlimited within the VM's RAM. |
+| AWS directly | Too much configuration overhead for guerilla development and not free. Supabase + Fly.io + Cloudflare R2 gives equivalent capability at $0. |
+| GraphQL | REST is simpler to build and debug for a known schema. Adds complexity without benefit. |
+| WebSockets (Phase 1) | HTTP polling every 5 seconds is sufficient for the MVP Pulse window. WebSockets add connection management complexity that is not warranted at small scale. Add them in Phase 2. |
+| Kubernetes | Not until scale requires it. Fly.io handles orchestration at this stage. |
+| MongoDB or other NoSQL | PostgreSQL handles the relational and JSONB needs. Adding a second database type adds operational burden. |
+| Socket.io | Not needed at this stage. FastAPI native WebSockets are sufficient when WebSockets are eventually added. |
+| Celery (initially) | RQ is sufficient. Celery when RQ's limits are reached. |
+| Web frontend | Mobile-first. No web frontend in the initial build. Web is a future phase decision. |
+| Stripe Identity (Phase 1) | $1.50/verification. DMs are post-MVP. Do not build or pay for this until DMs are ready to ship. |
 
 ---
 
-*This stack document is complete. The build can begin. Next: migrate SCHEMA.md to actual SQL migration files in `migrations/0001_initial_schema.sql`, set up the repository structure defined above, and scaffold the FastAPI main API.*
+*This stack document reflects Phase 1 (free-tier, MVP-first). Build the Pulse loop. Prove D7 retention. Add complexity only when the product earns it. Next: `migrations/0001_initial_schema.sql`, repository scaffolding, FastAPI skeleton.*
