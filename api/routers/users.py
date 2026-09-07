@@ -27,6 +27,7 @@ class UserProfile(BaseModel):
     id: UUID
     username: str | None
     display_name: str | None
+    bio: str | None = None
     city: str | None
     country_code: str | None
     avatar_url: str | None = None
@@ -42,6 +43,7 @@ class UserProfile(BaseModel):
 class UpdateProfileRequest(BaseModel):
     username: str | None = Field(None, min_length=3, max_length=30, pattern=r"^[a-zA-Z0-9_]+$")
     display_name: str | None = Field(None, max_length=50)
+    bio: str | None = Field(None, max_length=200)
     city: str | None = Field(None, max_length=100)
     country_code: str | None = Field(None, min_length=2, max_length=2)
     avatar_url: str | None = Field(None, max_length=500)
@@ -59,7 +61,7 @@ async def get_my_profile(
 ):
     row = await db.execute(
         text("""
-            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+            SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
                    u.accent_color,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
@@ -86,7 +88,7 @@ async def search_users(
 ):
     rows = await db.execute(
         text("""
-            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+            SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
                    u.accent_color,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
@@ -131,7 +133,7 @@ async def get_user_profile(
 
     row = await db.execute(
         text("""
-            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+            SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
                    u.accent_color,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
@@ -148,6 +150,48 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return dict(user)
+
+
+@router.get("/{user_id}/followers")
+async def get_followers(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT u.id::text, u.username, u.display_name, u.avatar_url, u.accent_color,
+                   COALESCE(s.score, 0) AS sosh_score
+            FROM follows f
+            JOIN users u ON u.id = f.follower_id
+            LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
+            WHERE f.following_id = :user_id
+            ORDER BY f.created_at DESC
+            LIMIT 200
+        """),
+        {"user_id": user_id},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
+@router.get("/{user_id}/following")
+async def get_following(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT u.id::text, u.username, u.display_name, u.avatar_url, u.accent_color,
+                   COALESCE(s.score, 0) AS sosh_score
+            FROM follows f
+            JOIN users u ON u.id = f.following_id
+            LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
+            WHERE f.follower_id = :user_id
+            ORDER BY f.created_at DESC
+            LIMIT 200
+        """),
+        {"user_id": user_id},
+    )
+    return [dict(r) for r in rows.mappings().all()]
 
 
 @router.post("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
@@ -187,7 +231,7 @@ async def update_my_profile(
     # Use exclude_unset so explicitly sent null values (to clear fields) are included
     updates = body.model_dump(exclude_unset=True)
     # Strip unset non-nullable fields that weren't sent
-    updates = {k: v for k, v in updates.items() if k == "accent_color" or v is not None}
+    updates = {k: v for k, v in updates.items() if k in ("accent_color", "bio") or v is not None}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 

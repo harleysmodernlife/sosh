@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   StyleSheet,
@@ -17,7 +18,7 @@ import { CommentsModal } from '@/components/CommentsModal';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
-import type { User, Trophy, MyEntry, Post } from '@/lib/types';
+import type { User, UserSummary, Trophy, MyEntry, Post } from '@/lib/types';
 import { ACCENT_PALETTE } from '@/lib/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -32,6 +33,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
 
   async function pickAndUploadAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -139,6 +141,7 @@ export default function ProfileScreen() {
               : null}
             <Text style={styles.username}>@{user?.username ?? '—'}</Text>
             {user?.city && <Text style={styles.location}>{user.city}</Text>}
+            {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           </View>
           <View style={styles.headerActions}>
             {user?.is_admin && (
@@ -154,15 +157,23 @@ export default function ProfileScreen() {
 
         {/* Score */}
         <View style={styles.scoreRow}>
-          <View style={styles.statBox}>
+          <TouchableOpacity style={styles.statBox} onPress={async () => {
+            if (!user) return;
+            const list = await api.users.followers(user.id);
+            setFollowList({ mode: 'followers', users: list });
+          }}>
             <Text style={styles.statValue}>{user?.follower_count ?? 0}</Text>
             <Text style={styles.statLabel}>FOLLOWERS</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
-          <View style={styles.statBox}>
+          <TouchableOpacity style={styles.statBox} onPress={async () => {
+            if (!user) return;
+            const list = await api.users.following(user.id);
+            setFollowList({ mode: 'following', users: list });
+          }}>
             <Text style={styles.statValue}>{user?.following_count ?? 0}</Text>
             <Text style={styles.statLabel}>FOLLOWING</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{trophies.length}</Text>
@@ -284,7 +295,70 @@ export default function ProfileScreen() {
           }}
         />
       )}
+      {followList && (
+        <FollowListModal
+          mode={followList.mode}
+          users={followList.users}
+          onClose={() => setFollowList(null)}
+        />
+      )}
     </>
+  );
+}
+
+function FollowListModal({
+  mode,
+  users,
+  onClose,
+}: {
+  mode: 'followers' | 'following';
+  users: UserSummary[];
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.followModalContainer}>
+        <View style={styles.followModalHeader}>
+          <Text style={styles.followModalTitle}>{mode === 'followers' ? 'Followers' : 'Following'}</Text>
+          <TouchableOpacity onPress={onClose}><Text style={styles.followModalClose}>Done</Text></TouchableOpacity>
+        </View>
+        <FlatList
+          data={users}
+          keyExtractor={u => u.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.followRow}
+              onPress={() => { onClose(); router.push(`/user/${item.id}`); }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.followAvatar, item.accent_color ? { borderColor: item.accent_color } : undefined]}>
+                {item.avatar_url ? (
+                  <Image source={{ uri: item.avatar_url }} style={styles.followAvatarImg} />
+                ) : (
+                  <Text style={[styles.followAvatarLetter, item.accent_color ? { color: item.accent_color } : undefined]}>
+                    {(item.username ?? '?')[0].toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.followInfo}>
+                <Text style={styles.followName}>{item.display_name ?? `@${item.username}`}</Text>
+                {item.display_name && item.username ? <Text style={styles.followHandle}>@{item.username}</Text> : null}
+              </View>
+              <Text style={[styles.followScore, item.accent_color ? { color: item.accent_color } : undefined]}>
+                {item.sosh_score}
+              </Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={styles.followEmpty}>
+              <Text style={styles.followEmptyText}>Nobody here yet.</Text>
+            </View>
+          }
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
+    </Modal>
   );
 }
 
@@ -507,6 +581,7 @@ function EditProfileModal({
   onSave: (u: User) => void;
 }) {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
+  const [bio, setBio] = useState(user?.bio ?? '');
   const [city, setCity] = useState(user?.city ?? '');
   const [accentColor, setAccentColor] = useState<string | null>(user?.accent_color ?? null);
   const [saving, setSaving] = useState(false);
@@ -516,6 +591,7 @@ function EditProfileModal({
     try {
       const updated = await api.users.update({
         display_name: displayName || undefined,
+        bio: bio.trim() || null,
         city: city || undefined,
         accent_color: accentColor,
       });
@@ -556,6 +632,19 @@ function EditProfileModal({
               maxLength={50}
             />
             <Text style={styles.fieldHint}>Shown on your entries alongside @{user?.username}</Text>
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>BIO</Text>
+            <TextInput
+              style={[styles.fieldInput, { minHeight: 70, textAlignVertical: 'top' }]}
+              value={bio}
+              onChangeText={t => setBio(t.slice(0, 200))}
+              placeholder="Say something about yourself..."
+              placeholderTextColor="#444"
+              multiline
+              maxLength={200}
+            />
+            <Text style={styles.fieldHint}>{bio.length}/200</Text>
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>CITY</Text>
@@ -712,4 +801,21 @@ const styles = StyleSheet.create({
   postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
   postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
   postModalMetaRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+
+  bio: { fontSize: 13, color: '#666', lineHeight: 19, marginTop: 4 },
+
+  followModalContainer: { flex: 1, backgroundColor: '#000' },
+  followModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  followModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  followModalClose: { fontSize: 15, fontWeight: '600', color: '#555' },
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#0d0d0d' },
+  followAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#222', overflow: 'hidden', flexShrink: 0 },
+  followAvatarImg: { width: 44, height: 44, borderRadius: 22 },
+  followAvatarLetter: { fontSize: 17, fontWeight: '800', color: '#fff' },
+  followInfo: { flex: 1, gap: 2 },
+  followName: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  followHandle: { fontSize: 12, color: '#555' },
+  followScore: { fontSize: 15, fontWeight: '900', color: '#333' },
+  followEmpty: { paddingTop: 60, alignItems: 'center' },
+  followEmptyText: { color: '#333', fontSize: 14 },
 });

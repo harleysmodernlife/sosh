@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment } from './types';
+import type { User, UserSummary, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -48,13 +48,19 @@ export const api = {
 
     search: (q: string): Promise<User[]> => apiFetch(`/users/search?q=${encodeURIComponent(q)}`, {}, false),
 
+    followers: (userId: string): Promise<UserSummary[]> =>
+      apiFetch(`/users/${userId}/followers`, {}, false),
+
+    following: (userId: string): Promise<UserSummary[]> =>
+      apiFetch(`/users/${userId}/following`, {}, false),
+
     follow: (userId: string): Promise<void> =>
       apiFetch(`/users/${userId}/follow`, { method: 'POST' }),
 
     unfollow: (userId: string): Promise<void> =>
       apiFetch(`/users/${userId}/follow`, { method: 'DELETE' }),
 
-    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string; avatar_url?: string; accent_color?: string | null }): Promise<User> =>
+    update: (data: { username?: string; display_name?: string; bio?: string | null; city?: string; country_code?: string; avatar_url?: string; accent_color?: string | null }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
     myEntries: (): Promise<MyEntry[]> => apiFetch('/users/me/entries'),

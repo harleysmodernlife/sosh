@@ -2,6 +2,7 @@ export interface User {
   id: string;
   username: string | null;
   display_name: string | null;
+  bio: string | null;
   city: string | null;
   country_code: string | null;
   avatar_url: string | null;
@@ -12,6 +13,15 @@ export interface User {
   following_count: number;
   viewer_is_following: boolean;
   is_admin: boolean;
+}
+
+export interface UserSummary {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  accent_color: string | null;
+  sosh_score: number;
 }
 
 export const ACCENT_PALETTE = [
