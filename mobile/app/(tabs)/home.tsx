@@ -51,6 +51,7 @@ export default function HomeScreen() {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [feedMode, setFeedMode] = useState<'foryou' | 'following'>('foryou');
   const loadingMore = useRef(false);
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export default function HomeScreen() {
     try {
       const [p, posts, entries] = await Promise.all([
         api.pulses.active(),
-        api.posts.feed(0, PAGE),
+        api.posts.feed(0, PAGE, feedMode),
         api.feed.get(0, PAGE),
       ]);
       setPulse(p);
@@ -85,8 +86,18 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     api.pulses.active().then(setPulse).catch(() => {});
-    if (items.length === 0) load();
-  }, [items.length]));
+    if (items.length === 0 && loading) load();
+  }, [items.length, loading]));
+
+  // Reload when feed mode changes
+  useEffect(() => {
+    setItems([]);
+    setPostOffset(0);
+    setEntryOffset(0);
+    setPostsEnd(false);
+    setEntriesEnd(false);
+    setLoading(true);
+  }, [feedMode]);
 
   async function refresh() {
     setRefreshing(true);
@@ -101,7 +112,7 @@ export default function HomeScreen() {
     setMoreLoading(true);
     try {
       const [morePosts, moreEntries] = await Promise.all([
-        postsEnd ? Promise.resolve([]) : api.posts.feed(postOffset, PAGE),
+        postsEnd ? Promise.resolve([]) : api.posts.feed(postOffset, PAGE, feedMode),
         entriesEnd ? Promise.resolve([]) : api.feed.get(entryOffset, PAGE),
       ]);
       if (morePosts.length === 0 && moreEntries.length === 0) {
@@ -176,7 +187,7 @@ export default function HomeScreen() {
               />
             : <EntryCard entry={item.data} isVisible={visibleKeys.has(key)} />;
         }}
-        ListHeaderComponent={<Header pulse={pulse} />}
+        ListHeaderComponent={<Header pulse={pulse} feedMode={feedMode} onToggleFeed={setFeedMode} />}
         ListEmptyComponent={
           <View style={styles.emptyFeed}>
             <Text style={styles.emptyIcon}>◉</Text>
@@ -218,13 +229,35 @@ export default function HomeScreen() {
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
-function Header({ pulse }: { pulse: Pulse | null }) {
+function Header({
+  pulse,
+  feedMode,
+  onToggleFeed,
+}: {
+  pulse: Pulse | null;
+  feedMode: 'foryou' | 'following';
+  onToggleFeed: (m: 'foryou' | 'following') => void;
+}) {
   return (
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <Text style={styles.wordmark}>SÖSH</Text>
         <TouchableOpacity style={styles.composeBtn} onPress={() => router.push('/compose')}>
           <Text style={styles.composeBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.feedToggle}>
+        <TouchableOpacity
+          style={[styles.feedToggleBtn, feedMode === 'foryou' && styles.feedToggleBtnActive]}
+          onPress={() => onToggleFeed('foryou')}
+        >
+          <Text style={[styles.feedToggleText, feedMode === 'foryou' && styles.feedToggleTextActive]}>For You</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.feedToggleBtn, feedMode === 'following' && styles.feedToggleBtnActive]}
+          onPress={() => onToggleFeed('following')}
+        >
+          <Text style={[styles.feedToggleText, feedMode === 'following' && styles.feedToggleTextActive]}>Following</Text>
         </TouchableOpacity>
       </View>
       {pulse && (pulse.status === 'active' || pulse.status === 'voting') ? (
@@ -558,6 +591,12 @@ const styles = StyleSheet.create({
   wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6 },
   composeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   composeBtnText: { fontSize: 22, fontWeight: '300', color: '#000', lineHeight: 26 },
+
+  feedToggle: { flexDirection: 'row', paddingHorizontal: 20, gap: 4 },
+  feedToggleBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#1a1a1a' },
+  feedToggleBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  feedToggleText: { fontSize: 13, fontWeight: '700', color: '#444' },
+  feedToggleTextActive: { color: '#000' },
 
   quietBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#111' },
   quietDot: { fontSize: 12, color: '#282828' },

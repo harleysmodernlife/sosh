@@ -77,12 +77,18 @@ async def create_post(
 async def get_post_feed(
     offset: int = 0,
     limit: int = 20,
+    mode: str = "foryou",  # "foryou" | "following"
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Global For You feed — all posts, newest first."""
+    """Home feed — global (foryou) or following-only posts, newest first."""
+    where = (
+        "WHERE p.user_id IN (SELECT following_id FROM follows WHERE follower_id = :viewer_id) OR p.user_id = :viewer_id"
+        if mode == "following"
+        else ""
+    )
     rows = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
@@ -92,6 +98,7 @@ async def get_post_feed(
                    )) AS viewer_has_liked
             FROM posts p
             JOIN users u ON u.id = p.user_id
+            {where}
             ORDER BY p.created_at DESC
             LIMIT :limit OFFSET :offset
         """),

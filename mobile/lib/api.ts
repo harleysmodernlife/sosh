@@ -160,8 +160,8 @@ export const api = {
     }): Promise<Post> =>
       apiFetch('/posts', { method: 'POST', body: JSON.stringify(data) }),
 
-    feed: (offset = 0, limit = 20): Promise<Post[]> =>
-      apiFetch(`/posts/feed?offset=${offset}&limit=${limit}`),
+    feed: (offset = 0, limit = 20, mode: 'foryou' | 'following' = 'foryou'): Promise<Post[]> =>
+      apiFetch(`/posts/feed?offset=${offset}&limit=${limit}&mode=${mode}`),
 
     forUser: (userId: string, offset = 0): Promise<Post[]> =>
       apiFetch(`/posts/user/${userId}?offset=${offset}&limit=30`),
