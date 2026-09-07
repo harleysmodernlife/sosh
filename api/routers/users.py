@@ -158,7 +158,10 @@ async def update_my_profile(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Use exclude_unset so explicitly sent null values (to clear fields) are included
+    updates = body.model_dump(exclude_unset=True)
+    # Strip unset non-nullable fields that weren't sent
+    updates = {k: v for k, v in updates.items() if k == "accent_color" or v is not None}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
@@ -170,7 +173,7 @@ async def update_my_profile(
         if taken.first():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
-    if "accent_color" in updates and updates["accent_color"] not in _ACCENT_PALETTE:
+    if "accent_color" in updates and updates["accent_color"] is not None and updates["accent_color"] not in _ACCENT_PALETTE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid accent color. Choose from: {', '.join(sorted(_ACCENT_PALETTE))}",
