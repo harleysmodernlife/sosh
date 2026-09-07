@@ -203,8 +203,17 @@ export const api = {
   // ─── Reports ──────────────────────────────────────────────────────────────
 
   reports: {
-    flag: (entryId: string): Promise<void> =>
+    flagEntry: (entryId: string): Promise<void> =>
       apiFetch('/reports', { method: 'POST', body: JSON.stringify({ entry_id: entryId }) }),
+
+    flagPost: (postId: string): Promise<void> =>
+      apiFetch('/reports/post', { method: 'POST', body: JSON.stringify({ post_id: postId }) }),
+
+    flagUser: (userId: string): Promise<void> =>
+      apiFetch('/reports/user', { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+
+    adminPosts: (): Promise<any[]> => apiFetch('/reports/admin/posts'),
+    adminUsers: (): Promise<any[]> => apiFetch('/reports/admin/users'),
   },
 
   // ─── Admin ────────────────────────────────────────────────────────────────

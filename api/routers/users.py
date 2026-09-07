@@ -10,6 +10,7 @@ from auth import AuthenticatedUser, get_current_user
 from config import settings
 from database import get_db
 from services.notif import create_notification
+from services.push import send_follow_notification
 
 router = APIRouter()
 
@@ -211,6 +212,13 @@ async def follow_user(
     )
     follower_name = (name_row.mappings().first() or {}).get("name", "Someone")
 
+    # Get followed user's push token for notification
+    token_row = await db.execute(
+        text("SELECT push_token FROM users WHERE id = :uid"),
+        {"uid": user_id},
+    )
+    followed_token = (token_row.mappings().first() or {}).get("push_token")
+
     result = await db.execute(
         text("INSERT INTO follows (follower_id, following_id) VALUES (:follower, :following) ON CONFLICT DO NOTHING"),
         {"follower": current_user.user_id, "following": user_id},
@@ -223,7 +231,11 @@ async def follow_user(
             body=f"{follower_name} followed you",
             actor_id=current_user.user_id,
         )
-    await db.commit()
+        await db.commit()
+        if followed_token:
+            send_follow_notification(followed_token, follower_name, current_user.user_id)
+    else:
+        await db.commit()
 
 
 @router.delete("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)

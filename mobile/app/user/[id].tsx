@@ -114,21 +114,40 @@ export default function UserProfileScreen() {
           {user.city && <Text style={styles.location}>{user.city}</Text>}
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
 
-          <TouchableOpacity
-            style={[
-              styles.followBtn,
-              user.viewer_is_following && styles.followBtnActive,
-              !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
-              user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
-            ]}
-            onPress={toggleFollow}
-            disabled={followInFlight}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
-              {user.viewer_is_following ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.profileActions}>
+            <TouchableOpacity
+              style={[
+                styles.followBtn,
+                user.viewer_is_following && styles.followBtnActive,
+                !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
+                user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
+              ]}
+              onPress={toggleFollow}
+              disabled={followInFlight}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
+                {user.viewer_is_following ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.moreBtn}
+              onPress={() => Alert.alert('', '', [
+                { text: 'Report user', style: 'destructive', onPress: () =>
+                  Alert.alert('Report this user?', 'We\'ll review their account.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Report', style: 'destructive', onPress: async () => {
+                      try { await api.reports.flagUser(user.id); Alert.alert('Reported', 'Thanks for letting us know.'); }
+                      catch (e: any) { Alert.alert('Error', e.message); }
+                    }},
+                  ])
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ])}
+            >
+              <Text style={styles.moreBtnText}>···</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.scoreRow}>
@@ -312,7 +331,10 @@ const styles = StyleSheet.create({
   username: { fontSize: 20, fontWeight: '800', color: '#fff' },
   displayName: { fontSize: 14, color: '#666' },
   location: { fontSize: 13, color: '#444' },
-  followBtn: { marginTop: 8, paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  profileActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  followBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  moreBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center' },
+  moreBtnText: { fontSize: 16, color: '#555', letterSpacing: 2 },
   followBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
   followBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   followBtnTextActive: { color: '#000' },

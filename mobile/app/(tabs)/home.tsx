@@ -189,14 +189,25 @@ export default function HomeScreen() {
         }}
         ListHeaderComponent={<Header pulse={pulse} feedMode={feedMode} onToggleFeed={setFeedMode} />}
         ListEmptyComponent={
-          <View style={styles.emptyFeed}>
-            <Text style={styles.emptyIcon}>◉</Text>
-            <Text style={styles.emptyTitle}>Nothing here yet.</Text>
-            <Text style={styles.emptyText}>Be the first to post something.</Text>
-            <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/compose')}>
-              <Text style={styles.emptyComposeText}>Make a post</Text>
-            </TouchableOpacity>
-          </View>
+          feedMode === 'following' ? (
+            <View style={styles.emptyFeed}>
+              <Text style={styles.emptyIcon}>◈</Text>
+              <Text style={styles.emptyTitle}>Nobody here yet.</Text>
+              <Text style={styles.emptyText}>Follow people to see their posts here.</Text>
+              <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/(tabs)/search')}>
+                <Text style={styles.emptyComposeText}>Find people</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyFeed}>
+              <Text style={styles.emptyIcon}>◉</Text>
+              <Text style={styles.emptyTitle}>Nothing here yet.</Text>
+              <Text style={styles.emptyText}>Be the first to post something.</Text>
+              <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/compose')}>
+                <Text style={styles.emptyComposeText}>Make a post</Text>
+              </TouchableOpacity>
+            </View>
+          )
         }
         ListFooterComponent={
           moreLoading ? (
@@ -361,26 +372,41 @@ function PostCard({
           <Text style={styles.cardName}>{post.display_name ?? `@${post.username}`}</Text>
           <Text style={styles.cardTime}>{formatTimeAgo(post.created_at)}</Text>
         </View>
-        {isOwn && (
-          <TouchableOpacity
-            style={styles.postMenu}
-            onPress={() => Alert.alert('', '', [
-              { text: 'Edit', onPress: onEdit },
-              { text: 'Delete', style: 'destructive', onPress: () =>
-                Alert.alert('Delete post?', 'This cannot be undone.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: async () => {
-                    try { await api.posts.delete(post.id); onDelete(); }
-                    catch (e: any) { Alert.alert('Error', e.message); }
-                  }},
-                ])
-              },
-              { text: 'Cancel', style: 'cancel' },
-            ])}
-          >
-            <Text style={styles.postMenuDots}>···</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.postMenu}
+          onPress={() => {
+            if (isOwn) {
+              Alert.alert('', '', [
+                { text: 'Edit', onPress: onEdit },
+                { text: 'Delete', style: 'destructive', onPress: () =>
+                  Alert.alert('Delete post?', 'This cannot be undone.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: async () => {
+                      try { await api.posts.delete(post.id); onDelete(); }
+                      catch (e: any) { Alert.alert('Error', e.message); }
+                    }},
+                  ])
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+            } else {
+              Alert.alert('', '', [
+                { text: 'Report post', style: 'destructive', onPress: () =>
+                  Alert.alert('Report this post?', 'We\'ll review it.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Report', style: 'destructive', onPress: async () => {
+                      try { await api.reports.flagPost(post.id); Alert.alert('Reported', 'Thanks for letting us know.'); }
+                      catch (e: any) { Alert.alert('Error', e.message); }
+                    }},
+                  ])
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+            }
+          }}
+        >
+          <Text style={styles.postMenuDots}>···</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
 
       {post.content_type !== 'text' && post.media_url ? (

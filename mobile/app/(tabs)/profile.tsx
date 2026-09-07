@@ -593,16 +593,24 @@ function EditProfileModal({
   onClose: () => void;
   onSave: (u: User) => void;
 }) {
+  const [username, setUsername] = useState(user?.username ?? '');
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [city, setCity] = useState(user?.city ?? '');
   const [accentColor, setAccentColor] = useState<string | null>(user?.accent_color ?? null);
   const [saving, setSaving] = useState(false);
 
+  const usernameValid = /^[a-zA-Z0-9_]{3,30}$/.test(username);
+
   async function save() {
+    if (!usernameValid) {
+      Alert.alert('Invalid username', 'Use 3–30 characters: letters, numbers, underscores only.');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await api.users.update({
+        username: username.trim(),
         display_name: displayName || undefined,
         bio: bio.trim() || null,
         city: city || undefined,
@@ -635,6 +643,20 @@ function EditProfileModal({
 
         <View style={styles.modalFields}>
           <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>USERNAME</Text>
+            <TextInput
+              style={[styles.fieldInput, username.length > 0 && !usernameValid && { borderColor: '#661111' }]}
+              value={username}
+              onChangeText={t => setUsername(t.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 30))}
+              placeholder="your_username"
+              placeholderTextColor="#444"
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={30}
+            />
+            <Text style={styles.fieldHint}>Letters, numbers, underscores only. Changing this updates your @ everywhere.</Text>
+          </View>
+          <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
             <TextInput
               style={styles.fieldInput}
@@ -644,7 +666,7 @@ function EditProfileModal({
               placeholderTextColor="#444"
               maxLength={50}
             />
-            <Text style={styles.fieldHint}>Shown on your entries alongside @{user?.username}</Text>
+            <Text style={styles.fieldHint}>Shown on your entries alongside @{username || user?.username}</Text>
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>BIO</Text>

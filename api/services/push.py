@@ -95,6 +95,24 @@ def send_results_notification(push_tokens: list[str], pulse_id: str) -> None:
         pass
 
 
+def send_follow_notification(push_token: str, follower_name: str, follower_id: str) -> None:
+    """Notify a user that someone followed them."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=f"{follower_name} followed you",
+                body="Tap to see their profile.",
+                data={"type": "follow", "user_id": follower_id},
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_like_notification(push_token: str, liker_name: str, post_id: str) -> None:
     """Notify a post author that someone liked their post."""
     try:

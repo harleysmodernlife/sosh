@@ -45,6 +45,10 @@ export default function AdminScreen() {
   const [inviteLabel, setInviteLabel] = useState('');
   const [creatingInvite, setCreatingInvite] = useState(false);
 
+  const [postReports, setPostReports] = useState<any[]>([]);
+  const [userReports, setUserReports] = useState<any[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
+
   const loadActive = useCallback(async () => {
     setLoadingPulse(true);
     try {
@@ -84,6 +88,10 @@ export default function AdminScreen() {
     loadActive();
     loadSchedule();
     loadInvites();
+    Promise.all([api.reports.adminPosts(), api.reports.adminUsers()])
+      .then(([pr, ur]) => { setPostReports(pr); setUserReports(ur); })
+      .catch(() => {})
+      .finally(() => setLoadingReports(false));
   }, [loadActive, loadSchedule, loadInvites]);
 
   async function handleCreateInvite() {
@@ -396,6 +404,39 @@ export default function AdminScreen() {
           )}
         </View>
 
+        {/* Reports */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>REPORTS</Text>
+          {loadingReports ? (
+            <ActivityIndicator color="#555" />
+          ) : postReports.length === 0 && userReports.length === 0 ? (
+            <Text style={styles.emptyText}>No reports.</Text>
+          ) : (
+            <>
+              {postReports.map((r, i) => (
+                <View key={i} style={styles.reportRow}>
+                  <Text style={styles.reportType}>POST</Text>
+                  <View style={styles.reportBody}>
+                    <Text style={styles.reportText} numberOfLines={2}>{r.text_content ?? `[${r.content_type}]`}</Text>
+                    <Text style={styles.reportMeta}>by @{r.post_author_username} · reported by @{r.reporter_username}</Text>
+                    {r.reason ? <Text style={styles.reportReason}>"{r.reason}"</Text> : null}
+                  </View>
+                </View>
+              ))}
+              {userReports.map((r, i) => (
+                <View key={i} style={styles.reportRow}>
+                  <Text style={styles.reportType}>USER</Text>
+                  <View style={styles.reportBody}>
+                    <Text style={styles.reportText}>@{r.reported_username}</Text>
+                    <Text style={styles.reportMeta}>reported by @{r.reporter_username}</Text>
+                    {r.reason ? <Text style={styles.reportReason}>"{r.reason}"</Text> : null}
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
+        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -508,4 +549,11 @@ const styles = StyleSheet.create({
   inviteStatus: { fontSize: 12, fontWeight: '600' },
   inviteUsed: { color: '#444' },
   inviteAvailable: { color: '#4caf50' },
+
+  reportRow: { flexDirection: 'row', gap: 10, backgroundColor: '#0f0f0f', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', padding: 12 },
+  reportType: { fontSize: 9, fontWeight: '900', color: '#555', letterSpacing: 2, paddingTop: 2, width: 36 },
+  reportBody: { flex: 1, gap: 3 },
+  reportText: { fontSize: 13, color: '#ccc' },
+  reportMeta: { fontSize: 11, color: '#555' },
+  reportReason: { fontSize: 11, color: '#666', fontStyle: 'italic' },
 });
