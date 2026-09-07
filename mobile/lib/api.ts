@@ -143,6 +143,9 @@ export const api = {
   // ─── Posts ────────────────────────────────────────────────────────────────
 
   posts: {
+    get: (postId: string): Promise<Post> =>
+      apiFetch(`/posts/${postId}`),
+
     create: (data: {
       content_type: 'text' | 'photo' | 'video';
       text_content?: string;

@@ -127,6 +127,33 @@ async def get_user_posts(
     return [dict(r) for r in rows.mappings().all()]
 
 
+@router.get("/{post_id}")
+async def get_post(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        text("""
+            SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
+                   u.username, u.display_name, u.avatar_url, u.accent_color,
+                   (EXISTS (
+                       SELECT 1 FROM post_likes pl
+                       WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
+                   )) AS viewer_has_liked
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.id = :post_id
+        """),
+        {"post_id": post_id, "viewer_id": current_user.user_id},
+    )
+    post = row.mappings().first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return dict(post)
+
+
 class UpdatePostRequest(BaseModel):
     text_content: str | None = Field(None, max_length=500)
     caption: str | None = Field(None, max_length=300)

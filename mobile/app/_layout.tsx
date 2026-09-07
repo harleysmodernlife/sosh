@@ -14,6 +14,8 @@ function navigateFromNotification(data: Record<string, unknown>) {
   if (type === 'pulse') router.push('/(tabs)/pulse');
   else if (type === 'trophy') router.push('/(tabs)/profile');
   else if (type === 'results' || type === 'milestone') router.push('/(tabs)/leaderboard');
+  else if ((type === 'like' || type === 'comment') && data.post_id) router.push(`/post/${data.post_id}`);
+  else if (type === 'follow' && data.user_id) router.push(`/user/${data.user_id}`);
 }
 
 SplashScreen.preventAutoHideAsync();
@@ -109,6 +111,7 @@ export default function RootLayout() {
         <Stack.Screen name="user/[id]" />
         <Stack.Screen name="legal" />
         <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="post/[id]" />
       </Stack>
     </>
   );
