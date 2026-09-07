@@ -8,7 +8,12 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Modal,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useFocusEffect } from 'expo-router';
 import { api } from '@/lib/api';
 import { LEADERBOARD_POLL_MS } from '@/constants/config';
@@ -21,6 +26,7 @@ export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [votingInFlight, setVotingInFlight] = useState<Set<string>>(new Set());
+  const [selectedEntry, setSelectedEntry] = useState<(Entry & { rank: number }) | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function load() {
@@ -157,12 +163,21 @@ export default function LeaderboardScreen() {
             <EntryCard
               entry={item}
               onVote={() => vote(item)}
+              onPress={() => setSelectedEntry(item)}
               voteInFlight={votingInFlight.has(item.id)}
               canVote={pulse.status === 'voting' || pulse.status === 'active'}
             />
           )}
         />
       )}
+
+      <EntryModal
+        entry={selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        onVote={e => vote(e)}
+        voteInFlight={selectedEntry ? votingInFlight.has(selectedEntry.id) : false}
+        canVote={pulse.status === 'voting' || pulse.status === 'active'}
+      />
     </View>
   );
 }
@@ -170,17 +185,19 @@ export default function LeaderboardScreen() {
 function EntryCard({
   entry,
   onVote,
+  onPress,
   voteInFlight,
   canVote,
 }: {
   entry: Entry & { rank: number };
   onVote: () => void;
+  onPress: () => void;
   voteInFlight: boolean;
   canVote: boolean;
 }) {
   const isFirst = entry.rank === 1;
   return (
-    <View style={[styles.card, isFirst && styles.cardFirst]}>
+    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[styles.card, isFirst && styles.cardFirst]}>
       <View style={[styles.rank, isFirst && styles.rankFirst]}>
         <Text style={[styles.rankNum, isFirst && styles.rankNumFirst]}>
           {isFirst ? '①' : `#${entry.rank}`}
@@ -216,7 +233,76 @@ function EntryCard({
           </>
         )}
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
+  );
+}
+
+function EntryModal({
+  entry,
+  onClose,
+  onVote,
+  voteInFlight,
+  canVote,
+}: {
+  entry: (Entry & { rank: number }) | null;
+  onClose: () => void;
+  onVote: (e: Entry) => void;
+  voteInFlight: boolean;
+  canVote: boolean;
+}) {
+  if (!entry) return null;
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.modal}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.modalClose}>Close</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalRank}>
+            {entry.rank === 1 ? '① Ranked #1' : `Ranked #${entry.rank}`}
+          </Text>
+          <View style={{ width: 48 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.modalContent}>
+          <TouchableOpacity onPress={() => { onClose(); router.push(`/user/${entry.user_id}`); }}>
+            <Text style={styles.modalUsername}>@{entry.username} →</Text>
+          </TouchableOpacity>
+
+          {entry.media_url ? (
+            <Image
+              source={{ uri: entry.media_url }}
+              style={[styles.modalImage, { width: SCREEN_WIDTH - 40 }]}
+              resizeMode="cover"
+            />
+          ) : entry.text_content ? (
+            <View style={styles.modalTextBox}>
+              <Text style={styles.modalText}>{entry.text_content}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.modalMeta}>
+            <Text style={styles.modalVoteCount}>{entry.vote_count} votes</Text>
+          </View>
+        </ScrollView>
+
+        {canVote && (
+          <TouchableOpacity
+            style={[styles.modalVoteBtn, entry.viewer_has_voted && styles.modalVoteBtnActive]}
+            onPress={() => onVote(entry)}
+            disabled={voteInFlight}
+          >
+            {voteInFlight ? (
+              <ActivityIndicator color={entry.viewer_has_voted ? '#000' : '#fff'} />
+            ) : (
+              <Text style={[styles.modalVoteBtnText, entry.viewer_has_voted && styles.modalVoteBtnTextActive]}>
+                {entry.viewer_has_voted ? '▲  Voted' : '▲  Vote'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    </Modal>
   );
 }
 
@@ -255,4 +341,20 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, color: '#1a1a1a' },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: '#333' },
   emptyText: { fontSize: 15, color: '#2a2a2a', textAlign: 'center', lineHeight: 23 },
+
+  modal: { flex: 1, backgroundColor: '#000' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  modalClose: { color: '#555', fontSize: 15, width: 48 },
+  modalRank: { fontSize: 14, fontWeight: '800', color: '#888', letterSpacing: 1 },
+  modalContent: { padding: 20, gap: 16, paddingBottom: 40 },
+  modalUsername: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  modalImage: { aspectRatio: 4 / 3, borderRadius: 12 },
+  modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
+  modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  modalMeta: { flexDirection: 'row', gap: 16 },
+  modalVoteCount: { fontSize: 13, color: '#444', fontWeight: '600' },
+  modalVoteBtn: { margin: 16, borderRadius: 12, paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  modalVoteBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  modalVoteBtnText: { color: '#666', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  modalVoteBtnTextActive: { color: '#000' },
 });

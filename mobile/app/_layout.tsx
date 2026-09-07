@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +8,12 @@ import * as Notifications from 'expo-notifications';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
+
+function navigateFromNotification(data: Record<string, unknown>) {
+  const type = data?.type;
+  if (type === 'pulse') router.push('/(tabs)/pulse');
+  else if (type === 'trophy') router.push('/(tabs)/profile');
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -41,6 +47,30 @@ async function registerPushToken() {
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const handledNotifId = useRef<string | null>(null);
+
+  // Live notification taps (background → foreground)
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const id = response.notification.request.identifier;
+      if (handledNotifId.current === id) return;
+      handledNotifId.current = id;
+      navigateFromNotification(response.notification.request.content.data as Record<string, unknown>);
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Cold-start: app opened by tapping a notification
+  useEffect(() => {
+    if (!initialized) return;
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (!response) return;
+      const id = response.notification.request.identifier;
+      if (handledNotifId.current === id) return;
+      handledNotifId.current = id;
+      navigateFromNotification(response.notification.request.content.data as Record<string, unknown>);
+    });
+  }, [initialized]);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -75,6 +105,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
         <Stack.Screen name="admin" />
+        <Stack.Screen name="user/[id]" />
       </Stack>
     </>
   );
