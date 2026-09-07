@@ -12,7 +12,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useFocusEffect } from 'expo-router';
@@ -237,13 +237,18 @@ function MediaView({
   entry: { content_type: string; media_url: string | null };
   style: object;
 }) {
-  const player = useVideoPlayer(
-    entry.content_type === 'video' && entry.media_url ? entry.media_url : null,
-    p => { p.loop = true; p.play(); },
-  );
   if (!entry.media_url) return null;
   if (entry.content_type === 'video') {
-    return <VideoView player={player} style={style} contentFit="cover" />;
+    return (
+      <Video
+        source={{ uri: entry.media_url }}
+        style={style}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        useNativeControls={false}
+      />
+    );
   }
   return <Image source={{ uri: entry.media_url }} style={style} resizeMode="cover" />;
 }

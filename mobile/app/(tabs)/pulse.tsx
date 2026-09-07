@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '@/lib/api';
 import type { Pulse, Entry } from '@/lib/types';
@@ -293,10 +293,16 @@ export default function PulseScreen() {
 }
 
 function VideoPreview({ uri, onRetake }: { uri: string; onRetake: () => void }) {
-  const player = useVideoPlayer(uri, p => { p.loop = true; p.play(); });
   return (
     <View style={styles.previewContainer}>
-      <VideoView style={styles.preview} player={player} nativeControls={false} />
+      <Video
+        source={{ uri }}
+        style={styles.preview}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        useNativeControls={false}
+      />
       <TouchableOpacity style={styles.retakeBtn} onPress={onRetake}>
         <Text style={styles.retakeBtnText}>Retake</Text>
       </TouchableOpacity>
