@@ -16,15 +16,18 @@ import { useFocusEffect, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
-import type { User, Trophy, MyEntry } from '@/lib/types';
+import type { User, Trophy, MyEntry, Post } from '@/lib/types';
 import { ACCENT_PALETTE } from '@/lib/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const GRID_CELL = Math.floor(SCREEN_WIDTH / 3);
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [entries, setEntries] = useState<MyEntry[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -90,14 +93,16 @@ export default function ProfileScreen() {
 
   async function load() {
     try {
-      const [me, myTrophies, myEntries] = await Promise.all([
-        api.users.me(),
+      const me = await api.users.me();
+      const [myTrophies, myEntries, myPosts] = await Promise.all([
         api.trophies.mine(),
         api.users.myEntries(),
+        api.posts.forUser(me.id),
       ]);
       setUser(me);
       setTrophies(myTrophies);
       setEntries(myEntries);
+      setPosts(myPosts);
     } catch {}
     finally { setLoading(false); }
   }
@@ -187,6 +192,49 @@ export default function ProfileScreen() {
           <Text style={styles.deleteText}>Delete Account</Text>
         </TouchableOpacity>
 
+        {/* Posts Grid */}
+        {posts.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>POSTS</Text>
+              <TouchableOpacity onPress={() => router.push('/compose')}>
+                <Text style={styles.sectionAction}>+ New</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.postsGrid}>
+              {posts.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.gridCell}
+                  onPress={() => setSelectedPost(p)}
+                  activeOpacity={0.8}
+                >
+                  {p.content_type !== 'text' && p.media_url ? (
+                    <Image source={{ uri: p.media_url }} style={styles.gridCellImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.gridCellText}>
+                      <Text style={styles.gridCellTextContent} numberOfLines={4}>
+                        {p.text_content}
+                      </Text>
+                    </View>
+                  )}
+                  {p.content_type === 'video' && (
+                    <View style={styles.gridVideoIcon}>
+                      <Text style={styles.gridVideoIconText}>▶</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {posts.length === 0 && (
+          <TouchableOpacity style={styles.newPostCta} onPress={() => router.push('/compose')}>
+            <Text style={styles.newPostCtaText}>+ Share your first post</Text>
+          </TouchableOpacity>
+        )}
+
         {/* My Entries */}
         {entries.length > 0 && (
           <View style={styles.section}>
@@ -219,6 +267,17 @@ export default function ProfileScreen() {
         onClose={() => setEditVisible(false)}
         onSave={updated => { setUser(updated); setEditVisible(false); }}
       />
+
+      {selectedPost && (
+        <PostDetailModal
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          onDelete={() => {
+            setPosts(prev => prev.filter(p => p.id !== selectedPost.id));
+            setSelectedPost(null);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -286,6 +345,68 @@ function TrophyCard({ trophy }: { trophy: Trophy }) {
         <Image source={{ uri: trophy.media_url }} style={styles.trophyEntryImage} />
       ) : null}
     </View>
+  );
+}
+
+function PostDetailModal({
+  post,
+  onClose,
+  onDelete,
+}: {
+  post: Post;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  function confirmDelete() {
+    Alert.alert('Delete post?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.posts.delete(post.id);
+            onDelete();
+          } catch (err: any) {
+            Alert.alert('Could not delete', err.message);
+          }
+        },
+      },
+    ]);
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.postModalContainer}>
+        <View style={styles.postModalHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.postModalClose}>Close</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={confirmDelete}>
+            <Text style={styles.postModalDelete}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.postModalContent}>
+          {post.content_type !== 'text' && post.media_url ? (
+            <Image
+              source={{ uri: post.media_url }}
+              style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
+              resizeMode="cover"
+            />
+          ) : post.text_content ? (
+            <View style={styles.postModalTextBox}>
+              <Text style={styles.postModalText}>{post.text_content}</Text>
+            </View>
+          ) : null}
+          {post.caption ? (
+            <Text style={styles.postModalCaption}>{post.caption}</Text>
+          ) : null}
+          <Text style={styles.postModalMeta}>
+            ♥ {post.like_count} likes
+          </Text>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -475,4 +596,28 @@ const styles = StyleSheet.create({
   colorPicker: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   colorSwatch: { width: 36, height: 36, borderRadius: 18, opacity: 0.7 },
   colorSwatchActive: { opacity: 1, borderWidth: 3, borderColor: '#fff' },
+
+  // Posts grid
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionAction: { fontSize: 12, fontWeight: '700', color: '#555' },
+  postsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -20 },
+  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: '#0d0d0d', borderWidth: 0.5, borderColor: '#000', position: 'relative' },
+  gridCellImage: { width: '100%', height: '100%' },
+  gridCellText: { flex: 1, padding: 8, justifyContent: 'center' },
+  gridCellTextContent: { fontSize: 12, color: '#888', lineHeight: 17 },
+  gridVideoIcon: { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
+  gridVideoIconText: { fontSize: 10, color: '#fff' },
+  newPostCta: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', borderStyle: 'dashed' },
+  newPostCtaText: { fontSize: 13, color: '#333', fontWeight: '600' },
+
+  // Post detail modal
+  postModalContainer: { flex: 1, backgroundColor: '#000' },
+  postModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  postModalClose: { fontSize: 15, color: '#555' },
+  postModalDelete: { fontSize: 15, color: '#661111', fontWeight: '600' },
+  postModalContent: { padding: 20, gap: 14, paddingBottom: 40 },
+  postModalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
+  postModalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
+  postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
 });

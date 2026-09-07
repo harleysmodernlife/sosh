@@ -7,15 +7,22 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { api } from '@/lib/api';
-import type { User, Trophy } from '@/lib/types';
+import type { User, Trophy, Post } from '@/lib/types';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const GRID_CELL = Math.floor(SCREEN_WIDTH / 3);
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [user, setUser] = useState<User | null>(null);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [followInFlight, setFollowInFlight] = useState(false);
@@ -23,12 +30,14 @@ export default function UserProfileScreen() {
   useEffect(() => {
     async function load() {
       try {
-        const [u, t] = await Promise.all([
+        const [u, t, p] = await Promise.all([
           api.users.get(id),
           api.trophies.forUser(id),
+          api.posts.forUser(id),
         ]);
         setUser(u);
         setTrophies(t);
+        setPosts(p);
       } catch {
         setNotFound(true);
       } finally {
@@ -42,7 +51,6 @@ export default function UserProfileScreen() {
     if (!user || followInFlight) return;
     setFollowInFlight(true);
     const wasFollowing = user.viewer_is_following;
-    // Optimistic update
     setUser(u => u ? {
       ...u,
       viewer_is_following: !wasFollowing,
@@ -55,7 +63,6 @@ export default function UserProfileScreen() {
         await api.users.follow(id);
       }
     } catch {
-      // Revert on failure
       setUser(u => u ? {
         ...u,
         viewer_is_following: wasFollowing,
@@ -82,72 +89,132 @@ export default function UserProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>←</Text>
-        </TouchableOpacity>
-      </View>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.back}>←</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.profileHeader}>
-        <View style={[styles.avatar, user.accent_color ? { borderColor: user.accent_color, borderWidth: 2 } : undefined]}>
-          {user.avatar_url ? (
-            <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
-          ) : (
-            <Text style={[styles.avatarLetter, user.accent_color ? { color: user.accent_color } : undefined]}>
-              {(user.username ?? user.display_name ?? '?')[0].toUpperCase()}
+        <View style={styles.profileHeader}>
+          <View style={[styles.avatar, user.accent_color ? { borderColor: user.accent_color, borderWidth: 2 } : undefined]}>
+            {user.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={[styles.avatarLetter, user.accent_color ? { color: user.accent_color } : undefined]}>
+                {(user.username ?? user.display_name ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <Text style={styles.username}>@{user.username ?? '—'}</Text>
+          {user.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
+          {user.city && <Text style={styles.location}>{user.city}</Text>}
+
+          <TouchableOpacity
+            style={[
+              styles.followBtn,
+              user.viewer_is_following && styles.followBtnActive,
+              !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
+              user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
+            ]}
+            onPress={toggleFollow}
+            disabled={followInFlight}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
+              {user.viewer_is_following ? 'Following' : 'Follow'}
             </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.scoreRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{user.follower_count}</Text>
+            <Text style={styles.statLabel}>FOLLOWERS</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{user.following_count}</Text>
+            <Text style={styles.statLabel}>FOLLOWING</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{trophies.length}</Text>
+            <Text style={styles.statLabel}>TROPHIES</Text>
+          </View>
+        </View>
+
+        {posts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>POSTS</Text>
+            <View style={styles.postsGrid}>
+              {posts.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.gridCell}
+                  onPress={() => setSelectedPost(p)}
+                  activeOpacity={0.8}
+                >
+                  {p.content_type !== 'text' && p.media_url ? (
+                    <Image source={{ uri: p.media_url }} style={styles.gridCellImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.gridCellText}>
+                      <Text style={styles.gridCellTextContent} numberOfLines={4}>{p.text_content}</Text>
+                    </View>
+                  )}
+                  {p.content_type === 'video' && (
+                    <View style={styles.gridVideoIcon}>
+                      <Text style={styles.gridVideoIconText}>▶</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>TROPHY CASE</Text>
+          {trophies.length === 0 ? (
+            <View style={styles.emptyTrophies}>
+              <Text style={styles.emptyTrophyText}>No trophies yet</Text>
+            </View>
+          ) : (
+            trophies.map(t => <TrophyCard key={t.id} trophy={t} />)
           )}
         </View>
-        <Text style={styles.username}>@{user.username ?? '—'}</Text>
-        {user.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
-        {user.city && <Text style={styles.location}>{user.city}</Text>}
+      </ScrollView>
 
-        <TouchableOpacity
-          style={[
-            styles.followBtn,
-            user.viewer_is_following && styles.followBtnActive,
-            !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
-            user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
-          ]}
-          onPress={toggleFollow}
-          disabled={followInFlight}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
-            {user.viewer_is_following ? 'Following' : 'Follow'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.scoreRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{user.follower_count}</Text>
-          <Text style={styles.statLabel}>FOLLOWERS</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{user.following_count}</Text>
-          <Text style={styles.statLabel}>FOLLOWING</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{trophies.length}</Text>
-          <Text style={styles.statLabel}>TROPHIES</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>TROPHY CASE</Text>
-        {trophies.length === 0 ? (
-          <View style={styles.emptyTrophies}>
-            <Text style={styles.emptyTrophyText}>No trophies yet</Text>
+      {selectedPost && (
+        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPost(null)}>
+          <View style={styles.postModalContainer}>
+            <View style={styles.postModalHeader}>
+              <TouchableOpacity onPress={() => setSelectedPost(null)}>
+                <Text style={styles.postModalClose}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.postModalContent}>
+              {selectedPost.content_type !== 'text' && selectedPost.media_url ? (
+                <Image
+                  source={{ uri: selectedPost.media_url }}
+                  style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
+                  resizeMode="cover"
+                />
+              ) : selectedPost.text_content ? (
+                <View style={styles.postModalTextBox}>
+                  <Text style={styles.postModalText}>{selectedPost.text_content}</Text>
+                </View>
+              ) : null}
+              {selectedPost.caption ? (
+                <Text style={styles.postModalCaption}>{selectedPost.caption}</Text>
+              ) : null}
+              <Text style={styles.postModalMeta}>♥ {selectedPost.like_count} likes</Text>
+            </ScrollView>
           </View>
-        ) : (
-          trophies.map(t => <TrophyCard key={t.id} trophy={t} />)
-        )}
-      </View>
-    </ScrollView>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -205,6 +272,15 @@ const styles = StyleSheet.create({
   section: { gap: 12 },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: '#444', letterSpacing: 3 },
 
+  // Posts grid
+  postsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -20 },
+  gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: '#0d0d0d', borderWidth: 0.5, borderColor: '#000', position: 'relative' },
+  gridCellImage: { width: '100%', height: '100%' },
+  gridCellText: { flex: 1, padding: 8, justifyContent: 'center' },
+  gridCellTextContent: { fontSize: 12, color: '#888', lineHeight: 17 },
+  gridVideoIcon: { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
+  gridVideoIconText: { fontSize: 10, color: '#fff' },
+
   emptyTrophies: { paddingVertical: 32, alignItems: 'center' },
   emptyTrophyText: { fontSize: 14, color: '#333' },
 
@@ -218,6 +294,16 @@ const styles = StyleSheet.create({
   trophyEntry: { backgroundColor: '#111', borderRadius: 8, padding: 12 },
   trophyEntryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   trophyEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
+
+  // Post detail modal
+  postModalContainer: { flex: 1, backgroundColor: '#000' },
+  postModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  postModalClose: { fontSize: 15, color: '#555' },
+  postModalContent: { padding: 20, gap: 14, paddingBottom: 40 },
+  postModalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
+  postModalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
+  postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
 
   notFoundText: { fontSize: 16, color: '#444' },
   backLink: { fontSize: 14, color: '#555' },

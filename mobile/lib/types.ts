@@ -107,6 +107,22 @@ export interface MyEntry {
   rank: number;
 }
 
+export interface Post {
+  id: string;
+  user_id: string;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  caption: string | null;
+  like_count: number;
+  created_at: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  accent_color: string | null;
+  viewer_has_liked: boolean;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

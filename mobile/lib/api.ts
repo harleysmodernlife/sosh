@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry } from './types';
+import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -138,6 +138,33 @@ export const api = {
       apiFetch('/admin/invites'),
   },
 
+  // ─── Posts ────────────────────────────────────────────────────────────────
+
+  posts: {
+    create: (data: {
+      content_type: 'text' | 'photo' | 'video';
+      text_content?: string;
+      media_url?: string;
+      caption?: string;
+    }): Promise<Post> =>
+      apiFetch('/posts', { method: 'POST', body: JSON.stringify(data) }),
+
+    feed: (offset = 0, limit = 20): Promise<Post[]> =>
+      apiFetch(`/posts/feed?offset=${offset}&limit=${limit}`),
+
+    forUser: (userId: string, offset = 0): Promise<Post[]> =>
+      apiFetch(`/posts/user/${userId}?offset=${offset}&limit=30`),
+
+    delete: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}`, { method: 'DELETE' }),
+
+    like: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/like`, { method: 'POST' }),
+
+    unlike: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/like`, { method: 'DELETE' }),
+  },
+
   // ─── Reports ──────────────────────────────────────────────────────────────
 
   reports: {
@@ -173,7 +200,7 @@ export const api = {
   // ─── Media ────────────────────────────────────────────────────────────────
 
   media: {
-    presign: (contentType: string, pulseId: string) =>
+    presign: (contentType: string, pulseId?: string) =>
       apiFetch<{ upload_url: string; media_key: string; expires_in: number }>(
         '/media/presign',
         { method: 'POST', body: JSON.stringify({ content_type: contentType, pulse_id: pulseId }) },

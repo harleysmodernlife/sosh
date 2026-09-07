@@ -9,40 +9,37 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
-  Modal,
-  ScrollView,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 import { api } from '@/lib/api';
-import type { Pulse, FeedEntry } from '@/lib/types';
+import type { Pulse, Post } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const FEED_LIMIT = 10;
+const FEED_LIMIT = 20;
 
 export default function HomeScreen() {
   const [pulse, setPulse] = useState<Pulse | null>(null);
-  const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [offset, setOffset] = useState(0);
   const [feedEnd, setFeedEnd] = useState(false);
   const [loading, setLoading] = useState(true);
   const [feedLoading, setFeedLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [selected, setSelected] = useState<FeedEntry | null>(null);
   const loadingMore = useRef(false);
 
   async function load() {
     try {
-      const [p, entries] = await Promise.all([
+      const [p, items] = await Promise.all([
         api.pulses.active(),
-        api.feed.get(0, FEED_LIMIT),
+        api.posts.feed(0, FEED_LIMIT),
       ]);
       setPulse(p);
-      setFeed(entries);
-      setOffset(entries.length);
-      setFeedEnd(entries.length < FEED_LIMIT);
+      setPosts(items);
+      setOffset(items.length);
+      setFeedEnd(items.length < FEED_LIMIT);
     } catch {}
     finally {
       setLoading(false);
@@ -51,10 +48,9 @@ export default function HomeScreen() {
   }
 
   useFocusEffect(useCallback(() => {
-    // On focus, just refresh active pulse — don't reset the scroll
     api.pulses.active().then(setPulse).catch(() => {});
-    if (feed.length === 0) load();
-  }, [feed.length]));
+    if (posts.length === 0) load();
+  }, [posts.length]));
 
   async function refresh() {
     setRefreshing(true);
@@ -67,19 +63,25 @@ export default function HomeScreen() {
     loadingMore.current = true;
     setFeedLoading(true);
     try {
-      const entries = await api.feed.get(offset, FEED_LIMIT);
-      if (entries.length === 0) {
+      const items = await api.posts.feed(offset, FEED_LIMIT);
+      if (items.length === 0) {
         setFeedEnd(true);
       } else {
-        setFeed(prev => [...prev, ...entries]);
-        setOffset(prev => prev + entries.length);
-        if (entries.length < FEED_LIMIT) setFeedEnd(true);
+        setPosts(prev => [...prev, ...items]);
+        setOffset(prev => prev + items.length);
+        if (items.length < FEED_LIMIT) setFeedEnd(true);
       }
     } catch {}
     finally {
       setFeedLoading(false);
       loadingMore.current = false;
     }
+  }
+
+  function handleLikeUpdate(postId: string, liked: boolean, count: number) {
+    setPosts(prev => prev.map(p =>
+      p.id === postId ? { ...p, viewer_has_liked: liked, like_count: count } : p
+    ));
   }
 
   if (loading) {
@@ -89,19 +91,22 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={feed}
+        data={posts}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <FeedCard entry={item} onPress={() => setSelected(item)} />
+          <PostCard post={item} onLikeUpdate={handleLikeUpdate} />
         )}
         ListHeaderComponent={<Header pulse={pulse} />}
         ListEmptyComponent={
           <View style={styles.emptyFeed}>
             <Text style={styles.emptyIcon}>◉</Text>
-            <Text style={styles.emptyTitle}>Nothing yet.</Text>
+            <Text style={styles.emptyTitle}>Nothing here yet.</Text>
             <Text style={styles.emptyText}>
-              Content will appear here after the first Pulse resolves.
+              Be the first to post something.
             </Text>
+            <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/compose')}>
+              <Text style={styles.emptyComposeText}>Make a post</Text>
+            </TouchableOpacity>
           </View>
         }
         ListFooterComponent={
@@ -109,7 +114,7 @@ export default function HomeScreen() {
             <View style={styles.footerLoader}>
               <ActivityIndicator color="#333" />
             </View>
-          ) : feedEnd && feed.length > 0 ? (
+          ) : feedEnd && posts.length > 0 ? (
             <Text style={styles.feedEnd}>You're all caught up.</Text>
           ) : null
         }
@@ -122,10 +127,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         style={styles.flatList}
       />
-
-      {selected && (
-        <EntryModal entry={selected} onClose={() => setSelected(null)} />
-      )}
     </View>
   );
 }
@@ -133,7 +134,12 @@ export default function HomeScreen() {
 function Header({ pulse }: { pulse: Pulse | null }) {
   return (
     <View style={styles.header}>
-      <Text style={styles.wordmark}>SÖSH</Text>
+      <View style={styles.headerTop}>
+        <Text style={styles.wordmark}>SÖSH</Text>
+        <TouchableOpacity style={styles.composeBtn} onPress={() => router.push('/compose')}>
+          <Text style={styles.composeBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
       {pulse && (pulse.status === 'active' || pulse.status === 'voting') ? (
         <PulseBanner pulse={pulse} />
       ) : (
@@ -173,18 +179,12 @@ function PulseBanner({ pulse }: { pulse: Pulse }) {
   );
 }
 
-function FeedMediaView({
-  entry,
-  style,
-}: {
-  entry: { content_type: string; media_url: string | null };
-  style: object;
-}) {
-  if (!entry.media_url) return null;
-  if (entry.content_type === 'video') {
+function PostMediaView({ post, style }: { post: Post; style: object }) {
+  if (!post.media_url) return null;
+  if (post.content_type === 'video') {
     return (
       <Video
-        source={{ uri: entry.media_url }}
+        source={{ uri: post.media_url }}
         style={style}
         resizeMode={ResizeMode.COVER}
         shouldPlay
@@ -193,89 +193,96 @@ function FeedMediaView({
       />
     );
   }
-  return <Image source={{ uri: entry.media_url }} style={style} resizeMode="cover" />;
+  return <Image source={{ uri: post.media_url }} style={style} resizeMode="cover" />;
 }
 
-function FeedCard({ entry, onPress }: { entry: FeedEntry; onPress: () => void }) {
-  const timeAgo = formatTimeAgo(entry.created_at);
+function PostCard({
+  post,
+  onLikeUpdate,
+}: {
+  post: Post;
+  onLikeUpdate: (id: string, liked: boolean, count: number) => void;
+}) {
+  const [liked, setLiked] = useState(post.viewer_has_liked);
+  const [likeCount, setLikeCount] = useState(post.like_count);
+  const [inFlight, setInFlight] = useState(false);
+
+  async function toggleLike() {
+    if (inFlight) return;
+    setInFlight(true);
+    const wasLiked = liked;
+    const newCount = likeCount + (wasLiked ? -1 : 1);
+    setLiked(!wasLiked);
+    setLikeCount(newCount);
+    onLikeUpdate(post.id, !wasLiked, newCount);
+    try {
+      if (wasLiked) await api.posts.unlike(post.id);
+      else await api.posts.like(post.id);
+    } catch {
+      setLiked(wasLiked);
+      setLikeCount(likeCount);
+      onLikeUpdate(post.id, wasLiked, likeCount);
+    } finally {
+      setInFlight(false);
+    }
+  }
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      {/* Pulse context label */}
-      <View style={styles.cardPulseRow}>
-        <Text style={styles.cardPulseLabel}>PULSE</Text>
-        {entry.pulse_city && <Text style={styles.cardPulseCity}>{entry.pulse_city}</Text>}
-        <Text style={styles.cardPulseTime}>{timeAgo}</Text>
-      </View>
-      <Text style={styles.cardPrompt} numberOfLines={2}>"{entry.pulse_prompt}"</Text>
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardAuthor}
+        onPress={() => router.push(`/user/${post.user_id}`)}
+        activeOpacity={0.8}
+      >
+        <View style={[
+          styles.postAvatar,
+          post.accent_color ? { borderColor: post.accent_color } : undefined,
+        ]}>
+          {post.avatar_url ? (
+            <Image source={{ uri: post.avatar_url }} style={styles.postAvatarImg} />
+          ) : (
+            <Text style={[
+              styles.postAvatarLetter,
+              post.accent_color ? { color: post.accent_color } : undefined,
+            ]}>
+              {(post.username ?? '?')[0].toUpperCase()}
+            </Text>
+          )}
+        </View>
+        <View style={styles.cardAuthorInfo}>
+          <Text style={styles.cardName}>
+            {post.display_name ?? `@${post.username}`}
+          </Text>
+          <Text style={styles.cardTime}>{formatTimeAgo(post.created_at)}</Text>
+        </View>
+      </TouchableOpacity>
 
-      {/* Entry content */}
-      {entry.media_url ? (
-        <FeedMediaView entry={entry} style={styles.cardImage} />
-      ) : entry.text_content ? (
+      {post.content_type !== 'text' && post.media_url ? (
+        <PostMediaView post={post} style={styles.cardImage} />
+      ) : post.text_content ? (
         <View style={styles.cardTextBox}>
-          <Text style={styles.cardText}>{entry.text_content}</Text>
+          <Text style={styles.cardText}>{post.text_content}</Text>
         </View>
       ) : null}
 
-      {/* Attribution */}
-      <View style={styles.cardFooter}>
-        <View>
-          <Text style={styles.cardName}>
-            {entry.display_name ?? `@${entry.username}`}
-          </Text>
-          {entry.city && <Text style={styles.cardCity}>{entry.city}</Text>}
-        </View>
-        <Text style={styles.cardVotes}>▲ {entry.vote_count}</Text>
+      {post.caption ? (
+        <Text style={styles.cardCaption} numberOfLines={3}>{post.caption}</Text>
+      ) : null}
+
+      <View style={styles.cardActions}>
+        <TouchableOpacity style={styles.likeBtn} onPress={toggleLike} activeOpacity={0.7}>
+          <Text style={[styles.likeIcon, liked && styles.likeIconActive]}>♥</Text>
+          <Text style={[styles.likeCount, liked && styles.likeCountActive]}>{likeCount}</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  );
-}
-
-function EntryModal({ entry, onClose }: { entry: FeedEntry; onClose: () => void }) {
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.modal}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.modalClose}>Close</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => { onClose(); router.push(`/user/${entry.user_id}`); }}>
-            <Text style={styles.modalUsername}>
-              {entry.display_name ?? `@${entry.username}`} →
-            </Text>
-            {entry.display_name && (
-              <Text style={styles.modalHandle}>@{entry.username}</Text>
-            )}
-          </TouchableOpacity>
-          <View style={{ width: 48 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.modalContent}>
-          <Text style={styles.modalPromptLabel}>PULSE</Text>
-          <Text style={styles.modalPrompt}>"{entry.pulse_prompt}"</Text>
-
-          {entry.media_url ? (
-            <FeedMediaView entry={entry} style={[styles.modalImage, { width: SCREEN_WIDTH - 40 }]} />
-          ) : entry.text_content ? (
-            <View style={styles.modalTextBox}>
-              <Text style={styles.modalText}>{entry.text_content}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.modalMeta}>
-            {entry.city && <Text style={styles.modalCity}>{entry.city}</Text>}
-            <Text style={styles.modalVotes}>▲ {entry.vote_count} votes</Text>
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
 function formatTimeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -291,7 +298,10 @@ const styles = StyleSheet.create({
 
   // Header
   header: { paddingTop: 56, gap: 12, marginBottom: 8 },
-  wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6, paddingHorizontal: 20 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
+  wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6 },
+  composeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  composeBtnText: { fontSize: 22, fontWeight: '300', color: '#000', lineHeight: 26 },
 
   // Quiet bar
   quietBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#111' },
@@ -306,48 +316,41 @@ const styles = StyleSheet.create({
   pulsePrompt: { fontSize: 22, fontWeight: '700', color: '#fff', lineHeight: 28 },
   pulseCta: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
 
-  // Feed
+  // Post card
   card: {
     borderBottomWidth: 1,
     borderBottomColor: '#111',
-    paddingBottom: 20,
-    marginTop: 20,
-    gap: 10,
+    paddingBottom: 16,
+    marginTop: 16,
+    gap: 12,
   },
-  cardPulseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20 },
-  cardPulseLabel: { fontSize: 10, fontWeight: '800', color: '#333', letterSpacing: 2 },
-  cardPulseCity: { fontSize: 10, color: '#333', fontWeight: '600' },
-  cardPulseTime: { fontSize: 10, color: '#2a2a2a', marginLeft: 'auto' },
-  cardPrompt: { fontSize: 13, color: '#555', lineHeight: 19, paddingHorizontal: 20, fontStyle: 'italic' },
+  cardAuthor: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
+  postAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden' },
+  postAvatarImg: { width: 40, height: 40, borderRadius: 20 },
+  postAvatarLetter: { fontSize: 17, fontWeight: '800', color: '#fff' },
+  cardAuthorInfo: { flex: 1, gap: 1 },
+  cardName: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  cardTime: { fontSize: 11, color: '#444' },
+
   cardImage: { width: SCREEN_WIDTH, aspectRatio: 4 / 3 },
-  cardTextBox: { marginHorizontal: 20, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
+  cardTextBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
   cardText: { fontSize: 20, color: '#fff', lineHeight: 28, fontWeight: '500' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20 },
-  cardName: { fontSize: 14, fontWeight: '700', color: '#888' },
-  cardCity: { fontSize: 12, color: '#3a3a3a', marginTop: 1 },
-  cardVotes: { fontSize: 13, fontWeight: '700', color: '#333' },
+  cardCaption: { fontSize: 14, color: '#888', paddingHorizontal: 16, lineHeight: 20 },
+
+  cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4 },
+  likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  likeIcon: { fontSize: 20, color: '#333' },
+  likeIconActive: { color: '#e63946' },
+  likeCount: { fontSize: 13, fontWeight: '700', color: '#333' },
+  likeCountActive: { color: '#e63946' },
 
   // Empty + footer
-  emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 12, paddingHorizontal: 40 },
+  emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 14, paddingHorizontal: 40 },
   emptyIcon: { fontSize: 40, color: '#1a1a1a' },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: '#2a2a2a' },
   emptyText: { fontSize: 14, color: '#222', textAlign: 'center', lineHeight: 21 },
+  emptyCompose: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, backgroundColor: '#fff' },
+  emptyComposeText: { fontSize: 14, fontWeight: '700', color: '#000' },
   footerLoader: { paddingVertical: 24, alignItems: 'center' },
   feedEnd: { textAlign: 'center', color: '#222', fontSize: 12, paddingVertical: 24 },
-
-  // Entry modal
-  modal: { flex: 1, backgroundColor: '#000' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
-  modalClose: { color: '#555', fontSize: 15, width: 48 },
-  modalUsername: { fontSize: 15, fontWeight: '800', color: '#fff', textAlign: 'center' },
-  modalHandle: { fontSize: 11, color: '#555', textAlign: 'center', marginTop: 1 },
-  modalContent: { padding: 20, gap: 14, paddingBottom: 40 },
-  modalPromptLabel: { fontSize: 10, fontWeight: '800', color: '#333', letterSpacing: 2 },
-  modalPrompt: { fontSize: 15, color: '#666', fontStyle: 'italic', lineHeight: 22 },
-  modalImage: { aspectRatio: 4 / 3, borderRadius: 12 },
-  modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
-  modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
-  modalMeta: { flexDirection: 'row', gap: 16, alignItems: 'center' },
-  modalCity: { fontSize: 13, color: '#444' },
-  modalVotes: { fontSize: 13, color: '#444', fontWeight: '600' },
 });

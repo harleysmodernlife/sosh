@@ -108,6 +108,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin" />
         <Stack.Screen name="user/[id]" />
         <Stack.Screen name="legal" />
+        <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );

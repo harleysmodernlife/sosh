@@ -32,7 +32,7 @@ ALLOWED_CONTENT_TYPES = {
 
 class PresignRequest(BaseModel):
     content_type: str
-    pulse_id: str = Field(..., description="UUID of the pulse this media is for")
+    pulse_id: str | None = Field(None, description="UUID of the pulse (omit for freeform posts)")
 
 
 class PresignResponse(BaseModel):
@@ -53,7 +53,8 @@ async def get_presigned_url(
         )
 
     ext = ALLOWED_CONTENT_TYPES[body.content_type]
-    media_key = f"pulse_entries/{current_user.user_id}/{uuid.uuid4()}{ext}"
+    folder = f"pulse_entries/{current_user.user_id}" if body.pulse_id else f"posts/{current_user.user_id}"
+    media_key = f"{folder}/{uuid.uuid4()}{ext}"
 
     sign_url = (
         f"{settings.supabase_url}/storage/v1/object/upload/sign"
@@ -77,9 +78,12 @@ async def get_presigned_url(
     relative = resp.json()["url"]
     upload_url = f"{settings.supabase_url}/storage/v1{relative}"
 
+    public_url = f"{settings.supabase_url}/storage/v1/object/public/{STORAGE_BUCKET}/{media_key}"
+
     return PresignResponse(
         upload_url=upload_url,
-        media_key=media_key,
+        # For posts (no pulse_id), return the public URL directly so client can store it
+        media_key=public_url if not body.pulse_id else media_key,
         expires_in=PRESIGN_EXPIRY,
     )
 
