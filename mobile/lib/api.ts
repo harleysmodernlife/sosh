@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post } from './types';
+import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -166,6 +166,19 @@ export const api = {
 
     unlike: (postId: string): Promise<void> =>
       apiFetch(`/posts/${postId}/like`, { method: 'DELETE' }),
+  },
+
+  // ─── Comments ─────────────────────────────────────────────────────────────
+
+  comments: {
+    list: (postId: string): Promise<Comment[]> =>
+      apiFetch(`/posts/${postId}/comments`),
+
+    create: (postId: string, body: string): Promise<Comment> =>
+      apiFetch(`/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
+
+    delete: (postId: string, commentId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
   },
 
   // ─── Reports ──────────────────────────────────────────────────────────────

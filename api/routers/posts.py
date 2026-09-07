@@ -59,7 +59,7 @@ async def create_post(
     row = await db.execute(
         text("""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
-                   p.media_url, p.caption, p.like_count, p.created_at::text,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    false AS viewer_has_liked
             FROM posts p
@@ -82,7 +82,7 @@ async def get_post_feed(
     rows = await db.execute(
         text("""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
-                   p.media_url, p.caption, p.like_count, p.created_at::text,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    (EXISTS (
                        SELECT 1 FROM post_likes pl
@@ -109,7 +109,7 @@ async def get_user_posts(
     rows = await db.execute(
         text("""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
-                   p.media_url, p.caption, p.like_count, p.created_at::text,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    (EXISTS (
                        SELECT 1 FROM post_likes pl
@@ -208,4 +208,80 @@ async def unlike_post(
             text("UPDATE posts SET like_count = GREATEST(like_count - 1, 0) WHERE id = :id"),
             {"id": post_id},
         )
+    await db.commit()
+
+
+# ── Comments ──────────────────────────────────────────────────────────────────
+
+_COMMENT_SELECT = """
+    SELECT c.id::text, c.post_id::text, c.user_id::text, c.body, c.created_at::text,
+           u.username, u.display_name, u.avatar_url, u.accent_color
+    FROM post_comments c
+    JOIN users u ON u.id = c.user_id
+"""
+
+
+class CreateCommentRequest(BaseModel):
+    body: str = Field(..., min_length=1, max_length=300)
+
+
+@router.get("/{post_id}/comments")
+async def get_comments(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text(f"{_COMMENT_SELECT} WHERE c.post_id = :post_id ORDER BY c.created_at ASC"),
+        {"post_id": post_id},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
+@router.post("/{post_id}/comments", status_code=status.HTTP_201_CREATED)
+async def create_comment(
+    post_id: UUID,
+    body: CreateCommentRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    exists = await db.execute(text("SELECT 1 FROM posts WHERE id = :id"), {"id": post_id})
+    if not exists.first():
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    comment_id = str(uuid4())
+    await db.execute(
+        text("INSERT INTO post_comments (id, post_id, user_id, body) VALUES (:id, :post_id, :uid, :body)"),
+        {"id": comment_id, "post_id": post_id, "uid": current_user.user_id, "body": body.body},
+    )
+    await db.execute(
+        text("UPDATE posts SET comment_count = comment_count + 1 WHERE id = :id"),
+        {"id": post_id},
+    )
+    await db.commit()
+
+    row = await db.execute(
+        text(f"{_COMMENT_SELECT} WHERE c.id = :id"),
+        {"id": comment_id},
+    )
+    return dict(row.mappings().first())
+
+
+@router.delete("/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_comment(
+    post_id: UUID,
+    comment_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        text("DELETE FROM post_comments WHERE id = :id AND user_id = :uid"),
+        {"id": comment_id, "uid": current_user.user_id},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Comment not found or not yours")
+    await db.execute(
+        text("UPDATE posts SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = :id"),
+        {"id": post_id},
+    )
     await db.commit()

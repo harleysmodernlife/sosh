@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
+import { CommentsModal } from '@/components/CommentsModal';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
@@ -368,6 +369,8 @@ function PostDetailModal({
   const [editText, setEditText] = useState(post.text_content ?? '');
   const [editCaption, setEditCaption] = useState(post.caption ?? '');
   const [saving, setSaving] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentCount, setCommentCount] = useState(post.comment_count);
 
   async function saveEdit() {
     setSaving(true);
@@ -471,7 +474,23 @@ function PostDetailModal({
             <Text style={styles.postModalCaption}>{post.caption}</Text>
           ) : null}
 
-          {!editing && <Text style={styles.postModalMeta}>♥ {post.like_count} likes</Text>}
+          {!editing && (
+            <View style={styles.postModalMetaRow}>
+              <Text style={styles.postModalMeta}>♥ {post.like_count} likes</Text>
+              <TouchableOpacity onPress={() => setShowComments(true)}>
+                <Text style={styles.postModalMeta}>💬 {commentCount} comments</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+
+      <CommentsModal
+        postId={post.id}
+        visible={showComments}
+        onClose={() => setShowComments(false)}
+        onCountChange={delta => setCommentCount(c => c + delta)}
+      />
         </ScrollView>
       </View>
     </Modal>
@@ -694,4 +713,5 @@ const styles = StyleSheet.create({
   captionEditLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
   postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
   postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
+  postModalMetaRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
 });

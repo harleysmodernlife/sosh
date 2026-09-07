@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import type { Pulse, Post, FeedEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
+import { CommentsModal } from '@/components/CommentsModal';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PAGE = 20;
@@ -134,6 +135,14 @@ export default function HomeScreen() {
     setEditingPost(null);
   }
 
+  function handleCommentCountChange(postId: string, delta: number) {
+    setItems(prev => prev.map(item =>
+      item.kind === 'post' && item.data.id === postId
+        ? { ...item, data: { ...item.data, comment_count: item.data.comment_count + delta } }
+        : item
+    ));
+  }
+
   function handleLikeUpdate(postId: string, liked: boolean, count: number) {
     setItems(prev => prev.map(item =>
       item.kind === 'post' && item.data.id === postId
@@ -163,6 +172,7 @@ export default function HomeScreen() {
                 isOwn={item.data.user_id === currentUserId}
                 onEdit={() => setEditingPost(item.data)}
                 onDelete={() => handlePostDelete(item.data.id)}
+                onCommentCountChange={handleCommentCountChange}
               />
             : <EntryCard entry={item.data} isVisible={visibleKeys.has(key)} />;
         }}
@@ -262,6 +272,7 @@ function PostCard({
   isOwn,
   onEdit,
   onDelete,
+  onCommentCountChange,
 }: {
   post: Post;
   onLikeUpdate: (id: string, liked: boolean, count: number) => void;
@@ -269,9 +280,12 @@ function PostCard({
   isOwn: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onCommentCountChange: (id: string, delta: number) => void;
 }) {
   const [liked, setLiked] = useState(post.viewer_has_liked);
   const [likeCount, setLikeCount] = useState(post.like_count);
+  const [commentCount, setCommentCount] = useState(post.comment_count);
+  const [showComments, setShowComments] = useState(false);
   const [inFlight, setInFlight] = useState(false);
 
   async function toggleLike() {
@@ -351,7 +365,21 @@ function PostCard({
           <Text style={[styles.likeIcon, liked && styles.likeIconActive]}>♥</Text>
           <Text style={[styles.likeCount, liked && styles.likeCountActive]}>{likeCount}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.likeBtn} onPress={() => setShowComments(true)} activeOpacity={0.7}>
+          <Text style={styles.commentIcon}>💬</Text>
+          <Text style={styles.likeCount}>{commentCount}</Text>
+        </TouchableOpacity>
       </View>
+
+      <CommentsModal
+        postId={post.id}
+        visible={showComments}
+        onClose={() => setShowComments(false)}
+        onCountChange={delta => {
+          setCommentCount(c => c + delta);
+          onCommentCountChange(post.id, delta);
+        }}
+      />
     </View>
   );
 }
@@ -562,6 +590,7 @@ const styles = StyleSheet.create({
   likeIconActive: { color: '#e63946' },
   likeCount: { fontSize: 13, fontWeight: '700', color: '#333' },
   likeCountActive: { color: '#e63946' },
+  commentIcon: { fontSize: 18, color: '#333' },
 
   // Entry card
   entryPulseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },

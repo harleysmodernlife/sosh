@@ -115,12 +115,25 @@ export interface Post {
   media_url: string | null;
   caption: string | null;
   like_count: number;
+  comment_count: number;
   created_at: string;
   username: string;
   display_name: string | null;
   avatar_url: string | null;
   accent_color: string | null;
   viewer_has_liked: boolean;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  accent_color: string | null;
 }
 
 export interface Trophy {
