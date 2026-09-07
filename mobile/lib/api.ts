@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry } from './types';
+import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -48,6 +48,8 @@ export const api = {
 
     update: (data: { username?: string; display_name?: string; city?: string; country_code?: string }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    myEntries: (): Promise<MyEntry[]> => apiFetch('/users/me/entries'),
 
     registerPushToken: (token: string): Promise<void> =>
       apiFetch('/users/me/push-token', { method: 'PUT', body: JSON.stringify({ token }) }),

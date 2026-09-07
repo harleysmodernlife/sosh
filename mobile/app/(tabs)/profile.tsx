@@ -10,15 +10,19 @@ import {
   Alert,
   Image,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
-import type { User, Trophy } from '@/lib/types';
+import type { User, Trophy, MyEntry } from '@/lib/types';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
+  const [entries, setEntries] = useState<MyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
 
@@ -29,12 +33,14 @@ export default function ProfileScreen() {
 
   async function load() {
     try {
-      const [me, myTrophies] = await Promise.all([
+      const [me, myTrophies, myEntries] = await Promise.all([
         api.users.me(),
         api.trophies.mine(),
+        api.users.myEntries(),
       ]);
       setUser(me);
       setTrophies(myTrophies);
+      setEntries(myEntries);
     } catch {}
     finally { setLoading(false); }
   }
@@ -82,6 +88,11 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
+            <Text style={styles.statValue}>{entries.length}</Text>
+            <Text style={styles.statLabel}>ENTRIES</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
             <Text style={styles.statValue}>{trophies.length}</Text>
             <Text style={styles.statLabel}>TROPHIES</Text>
           </View>
@@ -91,6 +102,14 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
+
+        {/* My Entries */}
+        {entries.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>MY ENTRIES</Text>
+            {entries.map(e => <MyEntryCard key={e.id} entry={e} />)}
+          </View>
+        )}
 
         {/* Trophy Case */}
         <View style={styles.section}>
@@ -117,6 +136,44 @@ export default function ProfileScreen() {
         onSave={updated => { setUser(updated); setEditVisible(false); }}
       />
     </>
+  );
+}
+
+function MyEntryCard({ entry }: { entry: MyEntry }) {
+  const isActive = entry.pulse_status === 'active' || entry.pulse_status === 'voting';
+  const rankLabel = entry.pulse_status === 'resolved'
+    ? `#${entry.rank}`
+    : isActive ? 'Live' : '—';
+  const rankIsWin = entry.rank === 1 && entry.pulse_status === 'resolved';
+
+  return (
+    <View style={styles.entryCard}>
+      <View style={styles.entryCardTop}>
+        <View style={[styles.entryRankBadge, rankIsWin && styles.entryRankBadgeWin]}>
+          <Text style={[styles.entryRank, rankIsWin && styles.entryRankWin]}>{rankLabel}</Text>
+        </View>
+        <View style={styles.entryMeta}>
+          <Text style={styles.entryPrompt} numberOfLines={2}>"{entry.pulse_prompt}"</Text>
+          {entry.pulse_city && <Text style={styles.entryCity}>{entry.pulse_city}</Text>}
+        </View>
+        <View style={styles.entryVoteBox}>
+          <Text style={styles.entryVoteCount}>{entry.vote_count}</Text>
+          <Text style={styles.entryVoteLabel}>votes</Text>
+        </View>
+      </View>
+
+      {entry.text_content ? (
+        <View style={styles.entryTextBox}>
+          <Text style={styles.entryText} numberOfLines={3}>{entry.text_content}</Text>
+        </View>
+      ) : entry.media_url ? (
+        <Image
+          source={{ uri: entry.media_url }}
+          style={styles.entryImage}
+          resizeMode="cover"
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -258,6 +315,23 @@ const styles = StyleSheet.create({
   emptyTrophyIcon: { fontSize: 40 },
   emptyTrophyText: { fontSize: 16, color: '#444' },
   emptyTrophyHint: { fontSize: 13, color: '#333', textAlign: 'center' },
+
+  // My Entry cards
+  entryCard: { backgroundColor: '#0d0d0d', borderRadius: 14, borderWidth: 1, borderColor: '#1a1a1a', padding: 16, gap: 12 },
+  entryCardTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  entryRankBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#111', borderWidth: 1, borderColor: '#222', justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  entryRankBadgeWin: { backgroundColor: '#1a1500', borderColor: '#443300' },
+  entryRank: { fontSize: 13, fontWeight: '800', color: '#555' },
+  entryRankWin: { color: '#cc9900' },
+  entryMeta: { flex: 1, gap: 3 },
+  entryPrompt: { fontSize: 13, color: '#555', fontStyle: 'italic', lineHeight: 18 },
+  entryCity: { fontSize: 11, color: '#333' },
+  entryVoteBox: { alignItems: 'center', gap: 1 },
+  entryVoteCount: { fontSize: 20, fontWeight: '900', color: '#fff' },
+  entryVoteLabel: { fontSize: 9, fontWeight: '700', color: '#444', letterSpacing: 1 },
+  entryTextBox: { backgroundColor: '#111', borderRadius: 8, padding: 12 },
+  entryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
+  entryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
 
   trophyCard: { backgroundColor: '#0d0d0d', borderRadius: 14, borderWidth: 1, borderColor: '#1a1a1a', padding: 16, gap: 10 },
   trophyCardTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

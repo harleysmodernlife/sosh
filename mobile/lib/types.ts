@@ -79,6 +79,20 @@ export interface FeedEntry {
   pulse_city: string | null;
 }
 
+export interface MyEntry {
+  id: string;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  vote_count: number;
+  created_at: string;
+  pulse_id: string;
+  pulse_prompt: string;
+  pulse_city: string | null;
+  pulse_status: string;
+  rank: number;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

@@ -108,6 +108,41 @@ async def update_my_profile(
     return await get_my_profile(current_user, db)
 
 
+@router.get("/me/entries")
+async def get_my_entries(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT
+                pe.id::text,
+                pe.content_type,
+                pe.text_content,
+                pe.media_url,
+                pe.vote_count,
+                pe.created_at::text,
+                p.id::text   AS pulse_id,
+                p.prompt     AS pulse_prompt,
+                p.city       AS pulse_city,
+                p.status     AS pulse_status,
+                (
+                    SELECT COUNT(*) + 1
+                    FROM pulse_entries pe2
+                    WHERE pe2.pulse_id = pe.pulse_id
+                      AND pe2.vote_count > pe.vote_count
+                ) AS rank
+            FROM pulse_entries pe
+            JOIN pulses p ON p.id = pe.pulse_id
+            WHERE pe.user_id = :user_id
+            ORDER BY pe.created_at DESC
+            LIMIT 50
+        """),
+        {"user_id": current_user.user_id},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
 @router.put("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)
 async def register_push_token(
     body: PushTokenRequest,
