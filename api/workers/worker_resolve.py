@@ -2,24 +2,26 @@
 RQ job: resolve a Pulse.
 
 Steps:
-1. Mark pulse status = 'resolving'
-2. Flush Redis vote counts → pulse_entries.vote_count in DB
-3. Find the entry with the highest vote_count (winner)
-4. Create a trophy for the winner
-5. Upsert leaderboard_results
-6. Recalculate Sösh Score for ALL participants (entrants + voters)
-   Formula: trophies×100 + entries×10 + votes_received×2 + votes_cast×1
-7. Generate Mosaic (top 20 entries by vote count)
-8. Mark pulse = 'resolved'
-9. Send winner push notification
-10. Expire Redis leaderboard key (keep 24h for straggler polls)
+1.  Mark pulse status = 'resolving'
+2.  Flush Redis vote counts → pulse_entries.vote_count in DB
+3.  Find the entry with the highest vote_count (winner)
+4.  Create a trophy for the winner
+5.  Upsert leaderboard_results
+6.  Recalculate Sösh Score for ALL participants (entrants + voters)
+    Formula: trophies×100 + entries×10 + votes_received×2 + votes_cast×1
+7.  Collect winner push token + all entrant push tokens
+8.  Generate Mosaic (top 20 entries by vote count)
+9.  Mark pulse = 'resolved'
+10. Send winner push notification
+11. Send results notifications to all other entrants
+12. Expire Redis leaderboard key (keep 24h for straggler polls)
 """
 import psycopg2
 import redis as sync_redis
 import uuid as uuidlib
 
 from config import settings
-from services.push import send_winner_notification
+from services.push import send_results_notification, send_winner_notification
 
 
 def resolve_pulse(pulse_id: str) -> None:
@@ -128,10 +130,28 @@ def resolve_pulse(pulse_id: str) -> None:
                     (uid, uid, uid, uid, uid),
                 )
 
-                # 7. Get push token for winner notification
+            # 7. Collect push tokens for notifications
+            winner_push_token = None
+            entrant_push_tokens = []
+            if winner:
                 cur.execute("SELECT push_token FROM users WHERE id = %s", (user_id,))
                 row = cur.fetchone()
                 winner_push_token = row[0] if row else None
+
+            # All entrants except winner
+            cur.execute(
+                """
+                SELECT u.push_token
+                FROM pulse_entries pe
+                JOIN users u ON u.id = pe.user_id
+                WHERE pe.pulse_id = %s
+                  AND pe.moderation_status = 'approved'
+                  AND pe.user_id != %s
+                  AND u.push_token IS NOT NULL
+                """,
+                (pulse_id, user_id if winner else "00000000-0000-0000-0000-000000000000"),
+            )
+            entrant_push_tokens = [r[0] for r in cur.fetchall()]
 
             # 8. Generate Mosaic (top 20 entries by vote count) — skip if no entries
             cur.execute(
@@ -167,7 +187,11 @@ def resolve_pulse(pulse_id: str) -> None:
         if winner and winner_push_token:
             send_winner_notification(winner_push_token, winner[2] or "your city", pulse_id)
 
-        # 11. Clean up Redis leaderboard key (keep for 24h for any straggler polls)
+        # 11. Notify all other entrants that results are in
+        if entrant_push_tokens:
+            send_results_notification(entrant_push_tokens, pulse_id)
+
+        # 12. Clean up Redis leaderboard key (keep for 24h for any straggler polls)
         r.expire(leaderboard_key, 86400)
 
     except Exception:

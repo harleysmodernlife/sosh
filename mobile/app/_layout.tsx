@@ -13,6 +13,7 @@ function navigateFromNotification(data: Record<string, unknown>) {
   const type = data?.type;
   if (type === 'pulse') router.push('/(tabs)/pulse');
   else if (type === 'trophy') router.push('/(tabs)/profile');
+  else if (type === 'results' || type === 'milestone') router.push('/(tabs)/leaderboard');
 }
 
 SplashScreen.preventAutoHideAsync();

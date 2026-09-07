@@ -69,6 +69,32 @@ def send_milestone_notification(push_token: str, vote_count: int, entry_id: str)
         pass
 
 
+def send_results_notification(push_tokens: list[str], pulse_id: str) -> None:
+    """Notify all entrants (non-winners) that Pulse results are in."""
+    messages = [
+        PushMessage(
+            to=token,
+            title="Results are in!",
+            body="The Pulse has closed. See how you placed.",
+            data={"type": "results", "pulse_id": pulse_id},
+            sound="default",
+            priority="normal",
+        )
+        for token in push_tokens
+    ]
+    if not messages:
+        return
+    try:
+        responses = _client.publish_multiple(messages)
+        for response in responses:
+            try:
+                response.validate_response()
+            except (DeviceNotRegisteredError, PushTicketError):
+                pass
+    except PushServerError:
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:
