@@ -37,6 +37,10 @@ export default function HomeScreen() {
         api.trophies.mine(),
         api.pulses.resolved(),
       ]);
+      if (!me.username) {
+        router.replace('/onboarding');
+        return;
+      }
       setUser(me);
       setPulse(activePulse);
       setTrophies(myTrophies);
@@ -91,7 +95,13 @@ export default function HomeScreen() {
       {/* Score card */}
       {user && (
         <View style={styles.scoreCard}>
-          <Text style={styles.username}>@{user.username ?? 'setup your username'}</Text>
+          {user.username ? (
+            <Text style={styles.username}>@{user.username}</Text>
+          ) : (
+            <TouchableOpacity onPress={() => router.replace('/onboarding')}>
+              <Text style={[styles.username, { color: '#ff4444' }]}>Set up your username →</Text>
+            </TouchableOpacity>
+          )}
           {user.city && <Text style={styles.city}>{user.city}</Text>}
           <Text style={styles.scoreLabel}>SÖSH SCORE</Text>
           <Text style={styles.scoreValue}>{user.sosh_score}</Text>
