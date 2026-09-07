@@ -52,7 +52,7 @@ export const api = {
     unfollow: (userId: string): Promise<void> =>
       apiFetch(`/users/${userId}/follow`, { method: 'DELETE' }),
 
-    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string; avatar_url?: string }): Promise<User> =>
+    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string; avatar_url?: string; accent_color?: string | null }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
     myEntries: (): Promise<MyEntry[]> => apiFetch('/users/me/entries'),

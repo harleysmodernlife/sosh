@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import type { User, Trophy, MyEntry } from '@/lib/types';
+import { ACCENT_PALETTE } from '@/lib/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -111,8 +112,8 @@ export default function ProfileScreen() {
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Profile header */}
-        <View style={styles.profileHeader}>
-          <TouchableOpacity style={styles.avatar} onPress={pickAndUploadAvatar} activeOpacity={0.8}>
+        <View style={[styles.profileHeader, user?.accent_color && { borderLeftWidth: 3, borderLeftColor: user.accent_color, paddingLeft: 13 }]}>
+          <TouchableOpacity style={[styles.avatar, user?.accent_color && { borderColor: user.accent_color }]} onPress={pickAndUploadAvatar} activeOpacity={0.8}>
             {avatarUploading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : user?.avatar_url ? (
@@ -166,7 +167,9 @@ export default function ProfileScreen() {
         {/* Sösh Score */}
         <View style={styles.scoreRowSmall}>
           <Text style={styles.scoreSmallLabel}>SÖSH SCORE</Text>
-          <Text style={styles.scoreSmallValue}>{user?.sosh_score ?? 0}</Text>
+          <Text style={[styles.scoreSmallValue, user?.accent_color ? { color: user.accent_color } : undefined]}>
+            {user?.sosh_score ?? 0}
+          </Text>
         </View>
 
         {/* Legal */}
@@ -299,6 +302,7 @@ function EditProfileModal({
 }) {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [city, setCity] = useState(user?.city ?? '');
+  const [accentColor, setAccentColor] = useState<string | null>(user?.accent_color ?? null);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -307,6 +311,7 @@ function EditProfileModal({
       const updated = await api.users.update({
         display_name: displayName || undefined,
         city: city || undefined,
+        accent_color: accentColor,
       });
       onSave(updated);
     } catch (err: any) {
@@ -358,6 +363,25 @@ function EditProfileModal({
               maxLength={100}
             />
             <Text style={styles.fieldHint}>Your city leaderboard — contact support to change</Text>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>ACCENT COLOR</Text>
+            <View style={styles.colorPicker}>
+              {ACCENT_PALETTE.map(({ hex, label }) => (
+                <TouchableOpacity
+                  key={hex}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: hex },
+                    accentColor === hex && styles.colorSwatchActive,
+                  ]}
+                  onPress={() => setAccentColor(accentColor === hex ? null : hex)}
+                  accessibilityLabel={label}
+                />
+              ))}
+            </View>
+            <Text style={styles.fieldHint}>Tints your profile accent — tap to select, tap again to clear</Text>
           </View>
         </View>
       </View>
@@ -448,4 +472,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
   fieldInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, color: '#fff', fontSize: 16 },
   fieldHint: { fontSize: 11, color: '#333', marginTop: 2 },
+  colorPicker: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  colorSwatch: { width: 36, height: 36, borderRadius: 18, opacity: 0.7 },
+  colorSwatchActive: { opacity: 1, borderWidth: 3, borderColor: '#fff' },
 });

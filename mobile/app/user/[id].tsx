@@ -90,11 +90,11 @@ export default function UserProfileScreen() {
       </View>
 
       <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, user.accent_color ? { borderColor: user.accent_color, borderWidth: 2 } : undefined]}>
           {user.avatar_url ? (
             <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
           ) : (
-            <Text style={styles.avatarLetter}>
+            <Text style={[styles.avatarLetter, user.accent_color ? { color: user.accent_color } : undefined]}>
               {(user.username ?? user.display_name ?? '?')[0].toUpperCase()}
             </Text>
           )}
@@ -104,7 +104,12 @@ export default function UserProfileScreen() {
         {user.city && <Text style={styles.location}>{user.city}</Text>}
 
         <TouchableOpacity
-          style={[styles.followBtn, user.viewer_is_following && styles.followBtnActive]}
+          style={[
+            styles.followBtn,
+            user.viewer_is_following && styles.followBtnActive,
+            !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
+            user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
+          ]}
           onPress={toggleFollow}
           disabled={followInFlight}
           activeOpacity={0.8}

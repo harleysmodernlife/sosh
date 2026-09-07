@@ -13,6 +13,16 @@ from database import get_db
 router = APIRouter()
 
 
+_ACCENT_PALETTE = {
+    "#E63946",  # red
+    "#F4A261",  # orange
+    "#2A9D8F",  # teal
+    "#457B9D",  # steel blue
+    "#8338EC",  # purple
+    "#06D6A0",  # mint
+}
+
+
 class UserProfile(BaseModel):
     id: UUID
     username: str | None
@@ -20,6 +30,7 @@ class UserProfile(BaseModel):
     city: str | None
     country_code: str | None
     avatar_url: str | None = None
+    accent_color: str | None = None
     sosh_score: int
     trophy_count: int
     follower_count: int = 0
@@ -34,6 +45,7 @@ class UpdateProfileRequest(BaseModel):
     city: str | None = Field(None, max_length=100)
     country_code: str | None = Field(None, min_length=2, max_length=2)
     avatar_url: str | None = Field(None, max_length=500)
+    accent_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class PushTokenRequest(BaseModel):
@@ -48,6 +60,7 @@ async def get_my_profile(
     row = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+                   u.accent_color,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
@@ -93,6 +106,7 @@ async def get_user_profile(
     row = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+                   u.accent_color,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
@@ -155,6 +169,12 @@ async def update_my_profile(
         )
         if taken.first():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+
+    if "accent_color" in updates and updates["accent_color"] not in _ACCENT_PALETTE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid accent color. Choose from: {', '.join(sorted(_ACCENT_PALETTE))}",
+        )
 
     set_clause = ", ".join(f"{k} = :{k}" for k in updates)
     updates["user_id"] = current_user.user_id

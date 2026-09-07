@@ -5,6 +5,7 @@ export interface User {
   city: string | null;
   country_code: string | null;
   avatar_url: string | null;
+  accent_color: string | null;
   sosh_score: number;
   trophy_count: number;
   follower_count: number;
@@ -12,6 +13,15 @@ export interface User {
   viewer_is_following: boolean;
   is_admin: boolean;
 }
+
+export const ACCENT_PALETTE = [
+  { hex: '#E63946', label: 'Red' },
+  { hex: '#F4A261', label: 'Orange' },
+  { hex: '#2A9D8F', label: 'Teal' },
+  { hex: '#457B9D', label: 'Blue' },
+  { hex: '#8338EC', label: 'Purple' },
+  { hex: '#06D6A0', label: 'Mint' },
+] as const;
 
 export interface Pulse {
   id: string;
