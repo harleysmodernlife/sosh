@@ -2,7 +2,7 @@
 // e.g. "http://192.168.1.42:8000"
 export const API_BASE_URL = __DEV__
   ? 'http://100.82.174.33:8000'
-  : 'https://sosh-api.fly.dev';
+  : 'https://sosh-production.up.railway.app';
 
 export const SUPABASE_URL = 'https://gxtbcxkdodmfikkhncmw.supabase.co';
 export const SUPABASE_ANON_KEY =
