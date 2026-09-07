@@ -246,24 +246,34 @@ In v0.1 development, `EXPO_ACCESS_TOKEN` is blank and pushes are not configured.
 
 ## Deployments
 
-### Backend (Fly.io)
+### Backend (Railway)
+
+The API and worker both run on Railway and **auto-deploy on every push to `main`**.
 
 ```bash
-# Deploy API
-cd api
-fly deploy
-
-# Check status
-fly status
+# Push to deploy
+git push origin main
 
 # Tail production logs
-fly logs
+railway logs --service sosh-api
+railway logs --service sosh-worker
 ```
 
-**Before deploying:**
-1. Set all production secrets on Fly.io: `fly secrets set DATABASE_URL=... REDIS_URL=... ...`
-2. Verify migration is applied on production DB (same Supabase project, already applied)
-3. Check worker is also deployed (separate Fly.io process in `fly.toml`)
+**Railway services:**
+| Service | Start command |
+|---------|--------------|
+| `sosh-api` | `uvicorn main:app --host 0.0.0.0 --port $PORT` |
+| `sosh-worker` | `rq worker --with-scheduler sosh` |
+
+Both services use the same `Dockerfile` (root of `api/`).
+
+**Environment variables** are set in the Railway dashboard under each service's Variables tab. Required vars: `DATABASE_URL`, `RQ_REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_JWKS_URL`, `EXPO_ACCESS_TOKEN`.
+
+**Important:** The worker reads Redis via `RQ_REDIS_URL` (not `REDIS_URL`). Dollar signs in Railway start commands are not shell-expanded, so the URL must be set as an environment variable — not embedded directly in the start command.
+
+**Before deploying a breaking change:**
+1. Verify migration is applied on production DB (run in Supabase SQL Editor)
+2. Check Railway build logs after push for startup errors
 
 ### Database migrations
 

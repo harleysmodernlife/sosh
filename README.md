@@ -2,6 +2,8 @@
 
 A global, real-time social platform built around synchronized events called **Pulses**. When a Pulse fires, every user in the active region gets a push notification and has 15 minutes to capture and post a response. The leaderboard resolves, a winner earns a permanent trophy, and the cycle resets.
 
+**Production:** `https://sosh-production.up.railway.app` · Railway (API + Worker) · Supabase (DB + Auth + Storage) · Upstash Redis
+
 **Core hypothesis:** Does the Pulse loop create a daily habit? (D7 retention target: 40%+)
 
 ---
@@ -29,27 +31,54 @@ A global, real-time social platform built around synchronized events called **Pu
 
 ```
 sosh/
-├── api/                    FastAPI backend
-│   ├── routers/            Route handlers (one file per domain)
-│   ├── services/           Business logic (moderation, push)
-│   ├── workers/            RQ background jobs
-│   ├── main.py             App entry point
-│   ├── auth.py             JWT verification (Supabase ES256/HS256)
-│   ├── config.py           Settings (pydantic-settings, reads .env)
-│   ├── database.py         SQLAlchemy async engine
-│   ├── redis_client.py     Redis async + sync clients
+├── api/                        FastAPI backend
+│   ├── routers/
+│   │   ├── admin.py            Fire/resolve Pulses, schedule management
+│   │   ├── entries.py          Entry submission
+│   │   ├── feed.py             Paginated content feed
+│   │   ├── media.py            Supabase Storage presign (entries + avatars)
+│   │   ├── pulses.py           Pulse state, leaderboard, mosaic, resolved history
+│   │   ├── reports.py          Content flagging
+│   │   ├── trophies.py         Trophy case (own + public)
+│   │   ├── users.py            User profiles, follow system, submission history
+│   │   └── votes.py            Cast/remove votes
+│   ├── services/
+│   │   ├── moderation.py       Keyword-based text filter
+│   │   └── push.py             Expo push notification client
+│   ├── workers/
+│   │   ├── worker_fire_pulse.py   Scheduled daily Pulse firing (30-prompt rotation)
+│   │   ├── worker_push.py         Send Pulse notification to all users
+│   │   └── worker_resolve.py      Full Pulse resolution (votes, trophy, mosaic, score)
+│   ├── main.py                 App entry point, router registration
+│   ├── auth.py                 JWT verification (Supabase ES256/HS256)
+│   ├── config.py               Settings (pydantic-settings, reads .env)
+│   ├── database.py             SQLAlchemy async engine
+│   ├── prompts.py              30 curated Pulse prompts for daily rotation
+│   ├── redis_client.py         Redis async + sync clients
 │   ├── requirements.txt
-│   ├── Dockerfile
-│   └── fly.toml            Fly.io deployment config
-├── mobile/                 React Native + Expo app (screens TBD)
+│   └── Dockerfile
+├── mobile/                     React Native + Expo app
+│   ├── app/
+│   │   ├── (auth)/             Login screen
+│   │   ├── (tabs)/             Main tab screens (home, pulse, leaderboard, profile)
+│   │   ├── admin.tsx           In-app admin panel
+│   │   ├── onboarding.tsx      Username + city setup (required before home)
+│   │   └── user/[id].tsx       Public user profile
+│   ├── assets/                 Brand assets (icon, splash, adaptive-icon)
+│   ├── components/             Shared components (useCountdown hook)
+│   ├── constants/config.ts     API_BASE_URL
+│   ├── lib/
+│   │   ├── api.ts              All API calls
+│   │   ├── supabase.ts         Supabase client
+│   │   └── types.ts            TypeScript interfaces
 │   ├── app.json
 │   ├── package.json
 │   └── tsconfig.json
 ├── migrations/
-│   └── 0001_initial_schema.sql   Full DB schema (run once in Supabase SQL Editor)
-├── docker-compose.yml      Local dev: redis, api, worker, rq-dashboard
-├── .env                    Local secrets (gitignored)
-├── .env.example            Template for .env
+│   └── 0001_initial_schema.sql   Base DB schema (Supabase SQL Editor)
+├── docker-compose.yml          Local dev: redis, api, worker, rq-dashboard
+├── .env                        Local secrets (gitignored)
+├── .env.example                Template for .env
 └── .gitignore
 ```
 
@@ -122,14 +151,11 @@ See `.env.example` for the full list. Required to run locally:
 | `DATABASE_URL` | PostgreSQL connection string (asyncpg format) |
 | `REDIS_URL` | Redis connection string |
 
-Optional (leave blank until features are needed):
+Optional:
 
 | Variable | Description |
 |----------|-------------|
-| `R2_ACCESS_KEY` | Cloudflare R2 access key (media uploads) |
-| `R2_SECRET_KEY` | Cloudflare R2 secret key |
-| `R2_ENDPOINT` | R2 endpoint URL |
-| `EXPO_ACCESS_TOKEN` | Expo push notification access token |
+| `EXPO_ACCESS_TOKEN` | Expo push notification access token (required for push delivery) |
 
 ---
 

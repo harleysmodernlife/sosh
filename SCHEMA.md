@@ -8,7 +8,104 @@
 
 ## Overview
 
-> **Implementation note (2026-09-07):** This document reflects the design-era schema. During implementation, several field names were changed to align with API code conventions. The authoritative schema is `migrations/0001_initial_schema.sql`. Key changes: `prompt_text` → `prompt`, `submission_closes_at` → `submission_ends_at`, `voting_closes_at` → `voting_ends_at`, `voter_user_id` → `voter_id`, `country` → `country_code`, `total_score` → `score`. When in doubt, the migration file wins.
+> **Implementation note (2026-09-07):** This document reflects the design-era schema. During implementation, several field names were changed to align with API code conventions. Key changes: `prompt_text` → `prompt`, `submission_closes_at` → `submission_ends_at`, `voting_closes_at` → `voting_ends_at`, `voter_user_id` → `voter_id`, `country` → `country_code`, `total_score` → `score`. When in doubt, the actual production schema wins.
+
+---
+
+## Live Schema Addendum — tables and columns added post-design
+
+The following additions are in production but not in `0001_initial_schema.sql`. They were applied via psql or SQL Editor directly. A future `0002_social_graph.sql` migration should formalize them.
+
+### `users` — additional columns
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `push_token` | `TEXT` | Expo push token, updated on each app launch |
+| `avatar_url` | `TEXT` | Public Supabase Storage URL for profile photo |
+| `updated_at` | `TIMESTAMPTZ` | Set on every PATCH |
+
+The `username` column allows `NULL` (user has not completed onboarding). API gates home access until username is set.
+
+### `pulse_entries` — additional columns
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `media_key` | `TEXT` | Storage path for media (internal reference) |
+| `moderation_status` | `TEXT` | `'approved'` (default) or `'rejected'` |
+| `content_type` | `TEXT` | `'text'`, `'photo'`, `'video'` |
+| `vote_count` | `INTEGER` | Denormalized from Redis on resolve |
+
+### `follows` (new table)
+
+Social graph. Added 2026-09-07.
+
+```sql
+CREATE TABLE follows (
+    follower_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (follower_id, following_id),
+    CHECK (follower_id != following_id)
+);
+CREATE INDEX follows_following_id_idx ON follows(following_id);
+```
+
+### `entry_reports` (new table)
+
+User-submitted content flags. Added 2026-09-07.
+
+```sql
+CREATE TABLE entry_reports (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entry_id     UUID NOT NULL REFERENCES pulse_entries(id) ON DELETE CASCADE,
+    reported_by  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(entry_id, reported_by)
+);
+```
+
+### `trophies` — actual shape in production
+
+```sql
+CREATE TABLE trophies (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id),
+    pulse_id     UUID NOT NULL REFERENCES pulses(id),
+    entry_id     UUID NOT NULL REFERENCES pulse_entries(id),
+    awarded_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Denormalized for fast reads
+    prompt       TEXT NOT NULL,
+    city         TEXT,
+    country_code TEXT,
+    content_type TEXT NOT NULL,
+    text_content TEXT,
+    media_url    TEXT,
+    vote_count   INTEGER NOT NULL DEFAULT 0
+);
+```
+
+### `sosh_score_snapshots` — actual shape in production
+
+```sql
+CREATE TABLE sosh_score_snapshots (
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id),
+    score   INTEGER NOT NULL DEFAULT 0,
+    -- Simple formula: trophy_count * 10 (temporary placeholder)
+    trophy_count INTEGER NOT NULL DEFAULT 0
+);
+```
+
+### `user_roles` — actual shape in production
+
+```sql
+CREATE TABLE user_roles (
+    user_id UUID NOT NULL REFERENCES users(id),
+    role    TEXT NOT NULL,  -- 'admin' for admin users
+    PRIMARY KEY (user_id, role)
+);
+```
+
+---
 
 
 This document defines the full data schema for Sösh. Every table here corresponds to a data object identified in FLOWS.md. Where a design decision affects the schema, the rationale is documented inline.
