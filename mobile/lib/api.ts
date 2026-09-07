@@ -104,6 +104,13 @@ export const api = {
       apiFetch(`/trophies/${userId}`, {}, false),
   },
 
+  // ─── Feed ─────────────────────────────────────────────────────────────────
+
+  feed: {
+    get: (offset = 0, limit = 10): Promise<import('./types').FeedEntry[]> =>
+      apiFetch(`/feed?offset=${offset}&limit=${limit}`, {}, false),
+  },
+
   // ─── Reports ──────────────────────────────────────────────────────────────
 
   reports: {

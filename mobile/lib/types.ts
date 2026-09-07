@@ -63,6 +63,22 @@ export interface MosaicEntry {
   display_name: string | null;
 }
 
+export interface FeedEntry {
+  id: string;
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  city: string | null;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  vote_count: number;
+  created_at: string;
+  pulse_id: string;
+  pulse_prompt: string;
+  pulse_city: string | null;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

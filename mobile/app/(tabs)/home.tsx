@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -10,230 +10,161 @@ import {
   Image,
   Dimensions,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '@/lib/api';
-import type { User, Pulse, Trophy, ResolvedPulse, MosaicEntry } from '@/lib/types';
+import type { Pulse, FeedEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const TILE_SIZE = (SCREEN_WIDTH - 40 - 9) / 4; // 4 cols, 3 gaps of 3px, outer padding 20
+const FEED_LIMIT = 10;
 
 export default function HomeScreen() {
-  const [user, setUser] = useState<User | null>(null);
   const [pulse, setPulse] = useState<Pulse | null>(null);
-  const [trophies, setTrophies] = useState<Trophy[]>([]);
-  const [lastPulse, setLastPulse] = useState<ResolvedPulse | null>(null);
-  const [mosaic, setMosaic] = useState<MosaicEntry[]>([]);
-  const [selectedTile, setSelectedTile] = useState<MosaicEntry | null>(null);
+  const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [feedEnd, setFeedEnd] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<FeedEntry | null>(null);
+  const loadingMore = useRef(false);
 
   async function load() {
     try {
-      const [me, activePulse, myTrophies, resolved] = await Promise.all([
-        api.users.me(),
+      const [p, entries] = await Promise.all([
         api.pulses.active(),
-        api.trophies.mine(),
-        api.pulses.resolved(),
+        api.feed.get(0, FEED_LIMIT),
       ]);
-      if (!me.username) {
-        router.replace('/onboarding');
-        return;
-      }
-      setUser(me);
-      setPulse(activePulse);
-      setTrophies(myTrophies);
-
-      const latest = resolved[0] ?? null;
-      setLastPulse(latest);
-      if (latest?.has_mosaic) {
-        const entries = await api.pulses.mosaic(latest.id);
-        setMosaic(entries);
-      } else {
-        setMosaic([]);
-      }
-    } catch (err) {
-      // Session may have expired — let root layout handle redirect
-    } finally {
+      setPulse(p);
+      setFeed(entries);
+      setOffset(entries.length);
+      setFeedEnd(entries.length < FEED_LIMIT);
+    } catch {}
+    finally {
       setLoading(false);
       setRefreshing(false);
     }
   }
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(useCallback(() => {
+    // On focus, just refresh active pulse — don't reset the scroll
+    api.pulses.active().then(setPulse).catch(() => {});
+    if (feed.length === 0) load();
+  }, [feed.length]));
 
-  const onRefresh = () => { setRefreshing(true); load(); };
+  async function refresh() {
+    setRefreshing(true);
+    setFeedEnd(false);
+    await load();
+  }
+
+  async function loadMore() {
+    if (feedLoading || feedEnd || loadingMore.current) return;
+    loadingMore.current = true;
+    setFeedLoading(true);
+    try {
+      const entries = await api.feed.get(offset, FEED_LIMIT);
+      if (entries.length === 0) {
+        setFeedEnd(true);
+      } else {
+        setFeed(prev => [...prev, ...entries]);
+        setOffset(prev => prev + entries.length);
+        if (entries.length < FEED_LIMIT) setFeedEnd(true);
+      }
+    } catch {}
+    finally {
+      setFeedLoading(false);
+      loadingMore.current = false;
+    }
+  }
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#fff" size="large" />
-      </View>
-    );
+    return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.wordmark}>SÖSH</Text>
-      </View>
-
-      {/* Score card */}
-      {user && (
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreCardTop}>
-            <View>
-              <Text style={styles.username}>@{user.username}</Text>
-              {user.city && <Text style={styles.city}>{user.city}</Text>}
-            </View>
-            <View style={styles.trophyBadge}>
-              <Text style={styles.trophyBadgeIcon}>🏆</Text>
-              <Text style={styles.trophyBadgeCount}>{user.trophy_count}</Text>
-            </View>
+    <>
+      <FlatList
+        data={feed}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <FeedCard entry={item} onPress={() => setSelected(item)} />
+        )}
+        ListHeaderComponent={
+          <Header pulse={pulse} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyFeed}>
+            <Text style={styles.emptyIcon}>◉</Text>
+            <Text style={styles.emptyTitle}>Nothing yet.</Text>
+            <Text style={styles.emptyText}>
+              Content will appear here after the first Pulse resolves.
+            </Text>
           </View>
-          <Text style={styles.scoreLabel}>SÖSH SCORE</Text>
-          <Text style={styles.scoreValue}>{user.sosh_score}</Text>
-        </View>
-      )}
+        }
+        ListFooterComponent={
+          feedLoading ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator color="#333" />
+            </View>
+          ) : feedEnd && feed.length > 0 ? (
+            <Text style={styles.feedEnd}>You're all caught up.</Text>
+          ) : null
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#fff" />
+        }
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+      />
 
-      {/* Active Pulse banner */}
+      {selected && (
+        <EntryModal entry={selected} onClose={() => setSelected(null)} />
+      )}
+    </>
+  );
+}
+
+function Header({ pulse }: { pulse: Pulse | null }) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.wordmark}>SÖSH</Text>
       {pulse && (pulse.status === 'active' || pulse.status === 'voting') ? (
         <PulseBanner pulse={pulse} />
       ) : (
-        <TouchableOpacity style={styles.quietCard} onPress={() => router.push('/(tabs)/pulse')} activeOpacity={0.7}>
-          <Text style={styles.quietLabel}>◉  SIGNAL QUIET</Text>
-          <Text style={styles.quietText}>
-            The next Pulse fires without warning.{'\n'}Check back — or just stay on the Pulse tab.
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Recent trophies */}
-      {trophies.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>TROPHY CASE</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
-              <Text style={styles.seeAll}>see all →</Text>
-            </TouchableOpacity>
-          </View>
-          {trophies.slice(0, 3).map(t => (
-            <View key={t.id} style={styles.trophyRow}>
-              <View style={styles.trophyIcon}>
-                <Text style={styles.trophyIconText}>🏆</Text>
-              </View>
-              <View style={styles.trophyInfo}>
-                <Text style={styles.trophyTitle}>
-                  {t.city ?? 'Global'} City Rep
-                </Text>
-                <Text style={styles.trophyPrompt} numberOfLines={1}>
-                  "{t.prompt}"
-                </Text>
-                <Text style={styles.trophyVotes}>{t.vote_count} votes</Text>
-              </View>
-            </View>
-          ))}
+        <View style={styles.quietBar}>
+          <Text style={styles.quietDot}>◉</Text>
+          <Text style={styles.quietText}>Signal quiet — Pulse fires without warning</Text>
         </View>
       )}
-
-      {trophies.length === 0 && (
-        <View style={styles.emptyTrophies}>
-          <Text style={styles.emptyTrophiesText}>No trophies yet.</Text>
-          <Text style={styles.emptyTrophiesHint}>
-            Win a Pulse to earn your first City Rep title.
-          </Text>
-        </View>
-      )}
-
-      {/* Mosaic — last resolved Pulse */}
-      {lastPulse && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>LAST PULSE</Text>
-          </View>
-          <View style={styles.mosaicMeta}>
-            <Text style={styles.mosaicPrompt} numberOfLines={2}>
-              "{lastPulse.prompt}"
-            </Text>
-            {lastPulse.winner_display_name || lastPulse.winner_username ? (
-              <Text style={styles.mosaicWinner}>
-                Won by @{lastPulse.winner_username ?? lastPulse.winner_display_name}
-                {lastPulse.winner_votes != null ? `  ·  ${lastPulse.winner_votes} votes` : ''}
-              </Text>
-            ) : null}
-          </View>
-
-          {mosaic.length > 0 ? (
-            <View style={styles.mosaicGrid}>
-              {mosaic.map((entry) => (
-                <MosaicTile key={entry.id} entry={entry} onPress={() => setSelectedTile(entry)} />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.mosaicEmpty}>
-              <Text style={styles.mosaicEmptyText}>No entries yet.</Text>
-            </View>
-          )}
-        </View>
-      )}
-      {/* Mosaic entry modal */}
-      {selectedTile && (
-        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedTile(null)}>
-          <View style={styles.modal}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setSelectedTile(null)}>
-                <Text style={styles.modalClose}>Close</Text>
-              </TouchableOpacity>
-              {selectedTile.username && (
-                <TouchableOpacity onPress={() => { setSelectedTile(null); router.push(`/user/${selectedTile.user_id}`); }}>
-                  <Text style={styles.modalUsername}>@{selectedTile.username} →</Text>
-                </TouchableOpacity>
-              )}
-              <View style={{ width: 48 }} />
-            </View>
-            <ScrollView contentContainerStyle={styles.modalContent}>
-              {selectedTile.media_url ? (
-                <Image source={{ uri: selectedTile.media_url }} style={styles.modalImage} resizeMode="cover" />
-              ) : selectedTile.text_content ? (
-                <View style={styles.modalTextBox}>
-                  <Text style={styles.modalText}>{selectedTile.text_content}</Text>
-                </View>
-              ) : null}
-              <Text style={styles.modalVotes}>{selectedTile.vote_count} votes</Text>
-            </ScrollView>
-          </View>
-        </Modal>
-      )}
-    </ScrollView>
+    </View>
   );
 }
 
 function PulseBanner({ pulse }: { pulse: Pulse }) {
-  const endsAt = pulse.status === 'active'
-    ? pulse.submission_ends_at
-    : pulse.voting_ends_at;
+  const endsAt = pulse.status === 'active' ? pulse.submission_ends_at : pulse.voting_ends_at;
   const countdown = useCountdown(endsAt);
 
   return (
-    <TouchableOpacity onPress={() => router.push('/(tabs)/pulse')} activeOpacity={0.85}>
+    <TouchableOpacity onPress={() => router.push('/(tabs)/pulse')} activeOpacity={0.9}>
       <LinearGradient
-        colors={pulse.status === 'active' ? ['#ff4444', '#cc0000'] : ['#ff8800', '#cc5500']}
+        colors={pulse.status === 'active' ? ['#ff4444', '#aa0000'] : ['#ff8800', '#bb5500']}
         style={styles.pulseBanner}
       >
-        <Text style={styles.pulseLiveLabel}>
-          {pulse.status === 'active' ? '⚡ PULSE IS LIVE' : '🗳 VOTING OPEN'}
-        </Text>
+        <View style={styles.pulseBannerTop}>
+          <Text style={styles.pulseLiveLabel}>
+            {pulse.status === 'active' ? '⚡ PULSE IS LIVE' : '🗳 VOTING OPEN'}
+          </Text>
+          {countdown && (
+            <Text style={styles.pulseCountdown}>{countdown}</Text>
+          )}
+        </View>
         <Text style={styles.pulsePrompt}>"{pulse.prompt}"</Text>
-        {countdown && (
-          <Text style={styles.pulseCountdown}>{countdown} remaining</Text>
-        )}
         <Text style={styles.pulseCta}>
           {pulse.status === 'active' ? 'Tap to respond →' : 'Tap to vote →'}
         </Text>
@@ -242,128 +173,164 @@ function PulseBanner({ pulse }: { pulse: Pulse }) {
   );
 }
 
-function MosaicTile({ entry, onPress }: { entry: MosaicEntry; onPress: () => void }) {
-  if (entry.media_url) {
-    return (
-      <TouchableOpacity style={styles.mosaicTile} onPress={onPress} activeOpacity={0.8}>
-        <Image source={{ uri: entry.media_url }} style={styles.mosaicTileImage} />
-      </TouchableOpacity>
-    );
-  }
+function FeedCard({ entry, onPress }: { entry: FeedEntry; onPress: () => void }) {
+  const timeAgo = formatTimeAgo(entry.created_at);
+
   return (
-    <TouchableOpacity style={[styles.mosaicTile, styles.mosaicTileText]} onPress={onPress} activeOpacity={0.8}>
-      <Text style={styles.mosaicTileTextContent} numberOfLines={4}>
-        {entry.text_content}
-      </Text>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+      {/* Pulse context label */}
+      <View style={styles.cardPulseRow}>
+        <Text style={styles.cardPulseLabel}>PULSE</Text>
+        {entry.pulse_city && <Text style={styles.cardPulseCity}>{entry.pulse_city}</Text>}
+        <Text style={styles.cardPulseTime}>{timeAgo}</Text>
+      </View>
+      <Text style={styles.cardPrompt} numberOfLines={2}>"{entry.pulse_prompt}"</Text>
+
+      {/* Entry content */}
+      {entry.media_url ? (
+        <Image
+          source={{ uri: entry.media_url }}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
+      ) : entry.text_content ? (
+        <View style={styles.cardTextBox}>
+          <Text style={styles.cardText}>{entry.text_content}</Text>
+        </View>
+      ) : null}
+
+      {/* Attribution */}
+      <View style={styles.cardFooter}>
+        <View>
+          <Text style={styles.cardName}>
+            {entry.display_name ?? `@${entry.username}`}
+          </Text>
+          {entry.city && <Text style={styles.cardCity}>{entry.city}</Text>}
+        </View>
+        <Text style={styles.cardVotes}>▲ {entry.vote_count}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
 
+function EntryModal({ entry, onClose }: { entry: FeedEntry; onClose: () => void }) {
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.modal}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.modalClose}>Close</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { onClose(); router.push(`/user/${entry.user_id}`); }}>
+            <Text style={styles.modalUsername}>
+              {entry.display_name ?? `@${entry.username}`} →
+            </Text>
+            {entry.display_name && (
+              <Text style={styles.modalHandle}>@{entry.username}</Text>
+            )}
+          </TouchableOpacity>
+          <View style={{ width: 48 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.modalContent}>
+          <Text style={styles.modalPromptLabel}>PULSE</Text>
+          <Text style={styles.modalPrompt}>"{entry.pulse_prompt}"</Text>
+
+          {entry.media_url ? (
+            <Image
+              source={{ uri: entry.media_url }}
+              style={[styles.modalImage, { width: SCREEN_WIDTH - 40 }]}
+              resizeMode="cover"
+            />
+          ) : entry.text_content ? (
+            <View style={styles.modalTextBox}>
+              <Text style={styles.modalText}>{entry.text_content}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.modalMeta}>
+            {entry.city && <Text style={styles.modalCity}>{entry.city}</Text>}
+            <Text style={styles.modalVotes}>▲ {entry.vote_count} votes</Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function formatTimeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  content: { padding: 20, paddingTop: 60, gap: 16, paddingBottom: 40 },
   center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  list: { paddingBottom: 48 },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6 },
+  // Header
+  header: { paddingTop: 56, gap: 12, marginBottom: 8 },
+  wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6, paddingHorizontal: 20 },
 
-  scoreCard: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1f1f1f',
-    gap: 4,
-  },
-  scoreCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  username: { fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 3 },
-  city: { fontSize: 13, color: '#555' },
-  trophyBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#1a1a0a', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#2a2a10' },
-  trophyBadgeIcon: { fontSize: 14 },
-  trophyBadgeCount: { fontSize: 14, fontWeight: '800', color: '#cc0' },
-  scoreLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3, marginBottom: 2 },
-  scoreValue: { fontSize: 64, fontWeight: '900', color: '#fff', lineHeight: 68 },
+  // Quiet bar
+  quietBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#111' },
+  quietDot: { fontSize: 12, color: '#282828' },
+  quietText: { fontSize: 12, color: '#2a2a2a', fontWeight: '600', letterSpacing: 0.3 },
 
-  pulseBanner: { borderRadius: 16, padding: 20, gap: 8 },
-  pulseLiveLabel: { fontSize: 12, fontWeight: '800', color: '#fff', letterSpacing: 2 },
+  // Pulse banner
+  pulseBanner: { marginHorizontal: 16, borderRadius: 16, padding: 20, gap: 10 },
+  pulseBannerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pulseLiveLabel: { fontSize: 12, fontWeight: '900', color: '#fff', letterSpacing: 2 },
+  pulseCountdown: { fontSize: 20, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
   pulsePrompt: { fontSize: 22, fontWeight: '700', color: '#fff', lineHeight: 28 },
-  pulseCountdown: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontVariant: ['tabular-nums'] },
-  pulseCta: { fontSize: 14, color: '#fff', fontWeight: '600', marginTop: 4 },
+  pulseCta: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
 
-  quietCard: {
-    backgroundColor: '#0a0a0a',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1a1a1a',
+  // Feed
+  card: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#111',
+    paddingBottom: 20,
+    marginTop: 20,
     gap: 10,
   },
-  quietLabel: { fontSize: 10, fontWeight: '700', color: '#333', letterSpacing: 3 },
-  quietText: { fontSize: 15, color: '#3a3a3a', lineHeight: 23 },
+  cardPulseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20 },
+  cardPulseLabel: { fontSize: 10, fontWeight: '800', color: '#333', letterSpacing: 2 },
+  cardPulseCity: { fontSize: 10, color: '#333', fontWeight: '600' },
+  cardPulseTime: { fontSize: 10, color: '#2a2a2a', marginLeft: 'auto' },
+  cardPrompt: { fontSize: 13, color: '#555', lineHeight: 19, paddingHorizontal: 20, fontStyle: 'italic' },
+  cardImage: { width: SCREEN_WIDTH, aspectRatio: 4 / 3 },
+  cardTextBox: { marginHorizontal: 20, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
+  cardText: { fontSize: 20, color: '#fff', lineHeight: 28, fontWeight: '500' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20 },
+  cardName: { fontSize: 14, fontWeight: '700', color: '#888' },
+  cardCity: { fontSize: 12, color: '#3a3a3a', marginTop: 1 },
+  cardVotes: { fontSize: 13, fontWeight: '700', color: '#333' },
 
-  section: { gap: 12 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: '#555', letterSpacing: 3 },
-  seeAll: { fontSize: 12, color: '#555' },
+  // Empty + footer
+  emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 12, paddingHorizontal: 40 },
+  emptyIcon: { fontSize: 40, color: '#1a1a1a' },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#2a2a2a' },
+  emptyText: { fontSize: 14, color: '#222', textAlign: 'center', lineHeight: 21 },
+  footerLoader: { paddingVertical: 24, alignItems: 'center' },
+  feedEnd: { textAlign: 'center', color: '#222', fontSize: 12, paddingVertical: 24 },
 
-  trophyRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    backgroundColor: '#0a0a0a',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1a1a1a',
-  },
-  trophyIcon: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  trophyIconText: { fontSize: 22 },
-  trophyInfo: { flex: 1, gap: 2 },
-  trophyTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  trophyPrompt: { fontSize: 12, color: '#555' },
-  trophyVotes: { fontSize: 11, color: '#444', marginTop: 2 },
-
-  emptyTrophies: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
-  },
-  emptyTrophiesText: { fontSize: 16, color: '#444' },
-  emptyTrophiesHint: { fontSize: 13, color: '#333', textAlign: 'center' },
-
-  mosaicMeta: { gap: 4, marginBottom: 10 },
-  mosaicPrompt: { fontSize: 16, fontWeight: '700', color: '#fff', lineHeight: 22 },
-  mosaicWinner: { fontSize: 12, color: '#555' },
-  mosaicGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-  },
-  mosaicTile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    borderRadius: 4,
-    overflow: 'hidden',
-    backgroundColor: '#111',
-  },
-  mosaicTileImage: { width: '100%', height: '100%' },
-  mosaicTileText: {
-    padding: 4,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#1a1a1a',
-  },
-  mosaicTileTextContent: { fontSize: 8, color: '#666', lineHeight: 11 },
-  mosaicEmpty: { paddingVertical: 20, alignItems: 'center' },
-  mosaicEmptyText: { fontSize: 13, color: '#333' },
-
+  // Entry modal
   modal: { flex: 1, backgroundColor: '#000' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
   modalClose: { color: '#555', fontSize: 15, width: 48 },
-  modalUsername: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  modalContent: { padding: 20, gap: 16 },
-  modalImage: { width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 },
+  modalUsername: { fontSize: 15, fontWeight: '800', color: '#fff', textAlign: 'center' },
+  modalHandle: { fontSize: 11, color: '#555', textAlign: 'center', marginTop: 1 },
+  modalContent: { padding: 20, gap: 14, paddingBottom: 40 },
+  modalPromptLabel: { fontSize: 10, fontWeight: '800', color: '#333', letterSpacing: 2 },
+  modalPrompt: { fontSize: 15, color: '#666', fontStyle: 'italic', lineHeight: 22 },
+  modalImage: { aspectRatio: 4 / 3, borderRadius: 12 },
   modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  modalMeta: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  modalCity: { fontSize: 13, color: '#444' },
   modalVotes: { fontSize: 13, color: '#444', fontWeight: '600' },
 });
