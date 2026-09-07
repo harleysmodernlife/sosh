@@ -151,6 +151,20 @@ Updates the authenticated user's profile. Send only the fields you want to chang
 
 ---
 
+#### `DELETE /users/me`
+
+Permanently deletes the authenticated user's account and all associated data. Irreversible.
+
+Deletion order: votes cast, entries (cascades votes received + reports), trophies, leaderboard results, Sosh score, user roles, invite redemption nulled, user row deleted, Supabase Auth identity deleted.
+
+**Auth:** required
+
+**Response 204** — account deleted
+
+**Response 401** — not authenticated
+
+---
+
 #### `POST /users/{user_id}/follow`
 
 Follow a user. Idempotent — following someone you already follow is a no-op.

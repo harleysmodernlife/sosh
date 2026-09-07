@@ -5,6 +5,52 @@ Format: `[version] — date — summary`
 
 ---
 
+## [0.3.0] — 2026-09-07
+
+### Features
+
+**Video submission**
+- `expo-video` installed and registered in `app.json` plugins
+- Pulse tab: capture mode extended to text / photo / video
+- `CameraView` switches to `mode="video"` for video capture
+- `startRecording()` / `stopRecording()` with 30-second limit and auto-stop
+- Recording badge (red dot + MM:SS countdown) overlaid on camera preview
+- Shutter button turns red stop-square while recording
+- `VideoPreview` component using `useVideoPlayer` + `<VideoView>` with autoplay loop
+- Video submits through existing presign → PUT → `POST /entries` flow with `content_type: 'video'`
+
+**Video playback in feed and leaderboard**
+- `FeedMediaView` and `MediaView` components auto-detect `content_type` and render
+  `<VideoView>` (autoplay loop) for videos, `<Image>` for photos
+- Applied to feed cards, feed modals, leaderboard cards, and leaderboard modals
+
+**Results notifications**
+- `send_results_notification()` added to `services/push.py` — batch push to all non-winner entrants
+- `worker_resolve.py`: collects entrant push tokens after score recompute, sends after DB commit
+- Deep link: tapping a results or milestone notification navigates to Leaderboard tab
+- Bug fix: winner push token was being fetched inside the participant score loop; moved outside
+
+**Terms of Service & Privacy Policy**
+- `/legal` screen with two-tab layout (Terms / Privacy), full real content
+- Terms: acceptance, service description, content rules, voting integrity, disclaimers
+- Privacy: data collected, use, third-party services (Supabase, Expo, Railway, Upstash), retention, rights
+- Accessible from Profile tab (Terms & Privacy link above Sign Out)
+
+**Account deletion (GDPR compliance)**
+- `DELETE /users/me` — deletes votes, entries, trophies, leaderboard results, score snapshot,
+  user roles, nulls invite redemption, deletes user row, then removes Supabase Auth identity
+  via Admin API (service role key)
+- Profile tab: "Delete Account" button below Sign Out, behind two-step destructive confirmation
+- Privacy Policy updated to reference in-app deletion (no longer "contact us")
+
+### Backend changes
+- `users.py`: `DELETE /users/me` endpoint; `httpx` used for Supabase Admin API call
+- `workers/worker_resolve.py`: results notification step; winner token fetch bug fixed
+- `services/push.py`: `send_results_notification()` added
+- `app/_layout.tsx`: `navigateFromNotification` handles `'results'` and `'milestone'` types
+
+---
+
 ## [0.2.0] — 2026-09-07
 
 ### Features
