@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export default function LoginScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -26,7 +27,12 @@ export default function LoginScreen() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.replace('/(tabs)/home');
+        try {
+          const user = await api.users.me();
+          router.replace(user.username ? '/(tabs)/home' : '/onboarding');
+        } catch {
+          router.replace('/(tabs)/home');
+        }
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;

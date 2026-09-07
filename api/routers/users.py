@@ -13,7 +13,7 @@ router = APIRouter()
 
 class UserProfile(BaseModel):
     id: UUID
-    username: str
+    username: str | None
     display_name: str | None
     city: str | None
     country_code: str | None
@@ -22,6 +22,7 @@ class UserProfile(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
+    username: str | None = Field(None, min_length=3, max_length=30, pattern=r"^[a-zA-Z0-9_]+$")
     display_name: str | None = Field(None, max_length=50)
     city: str | None = Field(None, max_length=100)
     country_code: str | None = Field(None, min_length=2, max_length=2)
@@ -84,6 +85,14 @@ async def update_my_profile(
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+    if "username" in updates:
+        taken = await db.execute(
+            text("SELECT 1 FROM users WHERE username = :u AND id != :uid"),
+            {"u": updates["username"], "uid": current_user.user_id},
+        )
+        if taken.first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
     set_clause = ", ".join(f"{k} = :{k}" for k in updates)
     updates["user_id"] = current_user.user_id

@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -43,11 +43,17 @@ export default function RootLayout() {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
       setInitialized(true);
       SplashScreen.hideAsync();
-      if (data.session) registerPushToken();
+      if (data.session) {
+        registerPushToken();
+        try {
+          const user = await api.users.me();
+          if (!user.username) router.replace('/onboarding');
+        } catch {}
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -67,6 +73,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
       </Stack>
     </>
   );

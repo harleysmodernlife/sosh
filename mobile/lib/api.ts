@@ -46,7 +46,7 @@ export const api = {
 
     get: (userId: string): Promise<User> => apiFetch(`/users/${userId}`, {}, false),
 
-    update: (data: { display_name?: string; city?: string; country_code?: string }): Promise<User> =>
+    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
     registerPushToken: (token: string): Promise<void> =>

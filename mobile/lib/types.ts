@@ -1,6 +1,6 @@
 export interface User {
   id: string;
-  username: string;
+  username: string | null;
   display_name: string | null;
   city: string | null;
   country_code: string | null;
