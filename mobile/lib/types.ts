@@ -146,6 +146,21 @@ export interface Comment {
   accent_color: string | null;
 }
 
+export interface Notification {
+  id: string;
+  type: string;
+  body: string;
+  read: boolean;
+  created_at: string;
+  post_id: string | null;
+  pulse_id: string | null;
+  actor_id: string | null;
+  actor_username: string | null;
+  actor_display_name: string | null;
+  actor_avatar_url: string | null;
+  actor_accent_color: string | null;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

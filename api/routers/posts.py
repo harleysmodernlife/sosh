@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
 from services.push import send_like_notification, send_comment_notification
+from services.notif import create_notification
 
 router = APIRouter()
 
@@ -234,17 +235,23 @@ async def like_post(
         )
     await db.commit()
 
-    # Send push notification to author (skip self-likes)
-    if (
-        result.rowcount > 0
-        and post_info["author_id"] != current_user.user_id
-        and post_info["author_push_token"]
-    ):
-        send_like_notification(
-            post_info["author_push_token"],
-            post_info["liker_name"],
-            str(post_id),
+    # Notify author (skip self-likes)
+    if result.rowcount > 0 and post_info["author_id"] != current_user.user_id:
+        await create_notification(
+            db,
+            user_id=post_info["author_id"],
+            type="like",
+            body=f"{post_info['liker_name']} liked your post",
+            actor_id=current_user.user_id,
+            post_id=str(post_id),
         )
+        await db.commit()
+        if post_info["author_push_token"]:
+            send_like_notification(
+                post_info["author_push_token"],
+                post_info["liker_name"],
+                str(post_id),
+            )
 
 
 @router.delete("/{post_id}/like", status_code=status.HTTP_204_NO_CONTENT)
@@ -334,15 +341,22 @@ async def create_comment(
     comment = dict(row.mappings().first())
 
     # Notify author (skip self-comments)
-    if (
-        post_info["author_id"] != current_user.user_id
-        and post_info["author_push_token"]
-    ):
-        send_comment_notification(
-            post_info["author_push_token"],
-            post_info["commenter_name"],
-            str(post_id),
+    if post_info["author_id"] != current_user.user_id:
+        await create_notification(
+            db,
+            user_id=post_info["author_id"],
+            type="comment",
+            body=f"{post_info['commenter_name']} commented on your post",
+            actor_id=current_user.user_id,
+            post_id=str(post_id),
         )
+        await db.commit()
+        if post_info["author_push_token"]:
+            send_comment_notification(
+                post_info["author_push_token"],
+                post_info["commenter_name"],
+                str(post_id),
+            )
 
     return comment
 

@@ -34,6 +34,11 @@ export default function ProfileScreen() {
   const [editVisible, setEditVisible] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    api.notifications.unreadCount().then(r => setUnreadCount(r.count)).catch(() => {});
+  }, []);
 
   async function pickAndUploadAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -144,6 +149,14 @@ export default function ProfileScreen() {
             {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.notifBtn} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
+              <Text style={styles.notifIcon}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             {user?.is_admin && (
               <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')}>
                 <Text style={styles.adminBtnText}>Admin</Text>
@@ -700,6 +713,10 @@ const styles = StyleSheet.create({
   username: { fontSize: 13, color: '#555' },
   location: { fontSize: 13, color: '#444' },
   headerActions: { flexDirection: 'row', gap: 8 },
+  notifBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  notifIcon: { fontSize: 20 },
+  notifBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#e63946', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
+  notifBadgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
   adminBtn: { backgroundColor: '#1a1a0a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#443' },
   adminBtnText: { color: '#cc0', fontSize: 13, fontWeight: '600' },
   editBtn: { backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#333' },

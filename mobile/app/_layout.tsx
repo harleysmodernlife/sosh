@@ -112,6 +112,7 @@ export default function RootLayout() {
         <Stack.Screen name="legal" />
         <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
         <Stack.Screen name="post/[id]" />
+        <Stack.Screen name="notifications" />
       </Stack>
     </>
   );

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth import AuthenticatedUser, get_current_user
 from config import settings
 from database import get_db
+from services.notif import create_notification
 
 router = APIRouter()
 
@@ -202,10 +203,26 @@ async def follow_user(
 ):
     if str(user_id) == current_user.user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot follow yourself")
-    await db.execute(
+
+    # Get follower's display name for notification
+    name_row = await db.execute(
+        text("SELECT COALESCE(display_name, '@' || username) AS name FROM users WHERE id = :uid"),
+        {"uid": current_user.user_id},
+    )
+    follower_name = (name_row.mappings().first() or {}).get("name", "Someone")
+
+    result = await db.execute(
         text("INSERT INTO follows (follower_id, following_id) VALUES (:follower, :following) ON CONFLICT DO NOTHING"),
         {"follower": current_user.user_id, "following": user_id},
     )
+    if result.rowcount > 0:
+        await create_notification(
+            db,
+            user_id=str(user_id),
+            type="follow",
+            body=f"{follower_name} followed you",
+            actor_id=current_user.user_id,
+        )
     await db.commit()
 
 
