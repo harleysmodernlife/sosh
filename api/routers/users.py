@@ -1,11 +1,13 @@
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import AuthenticatedUser, get_current_user
+from config import settings
 from database import get_db
 
 router = APIRouter()
@@ -199,6 +201,59 @@ async def get_my_entries(
         {"user_id": current_user.user_id},
     )
     return [dict(r) for r in rows.mappings().all()]
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_account(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Permanently delete the authenticated user's account and all their data.
+    Order matters: delete dependent rows before the users row.
+    Finally, delete the Supabase Auth identity so the email can be re-used.
+    """
+    uid = current_user.user_id
+
+    # 1. Delete votes they cast (voter_id FK, no cascade)
+    await db.execute(text("DELETE FROM votes WHERE voter_id = :uid"), {"uid": uid})
+
+    # 2. Delete their entries — cascades: votes received on those entries, entry_reports
+    await db.execute(text("DELETE FROM pulse_entries WHERE user_id = :uid"), {"uid": uid})
+
+    # 3. Delete trophies, leaderboard results, score snapshot, roles
+    await db.execute(text("DELETE FROM trophies WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM leaderboard_results WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM sosh_score_snapshots WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": uid})
+
+    # 4. Null out invite code redemptions (don't block the invite code from being re-used)
+    await db.execute(
+        text("UPDATE invite_codes SET used_by = NULL, used_at = NULL WHERE used_by = :uid"),
+        {"uid": uid},
+    )
+
+    # 5. Delete user row (follows cascade automatically via FK ON DELETE CASCADE)
+    await db.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": uid})
+
+    await db.commit()
+
+    # 6. Delete Supabase Auth identity via Admin API
+    if settings.supabase_url and settings.supabase_service_role_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.delete(
+                    f"{settings.supabase_url}/auth/v1/admin/users/{uid}",
+                    headers={
+                        "apikey": settings.supabase_service_role_key,
+                        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                    },
+                    timeout=10,
+                )
+        except Exception:
+            # Auth deletion failure is non-fatal for the response —
+            # the user row and all data are already gone.
+            pass
 
 
 @router.put("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)

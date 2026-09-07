@@ -59,6 +59,9 @@ export const api = {
 
     registerPushToken: (token: string): Promise<void> =>
       apiFetch('/users/me/push-token', { method: 'PUT', body: JSON.stringify({ token }) }),
+
+    deleteAccount: (): Promise<void> =>
+      apiFetch('/users/me', { method: 'DELETE' }),
   },
 
   // ─── Pulses ────────────────────────────────────────────────────────────────

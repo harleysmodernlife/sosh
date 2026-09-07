@@ -62,6 +62,31 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   }
 
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, entries, votes, and trophies. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: deleteAccount,
+        },
+      ],
+    );
+  }
+
+  async function deleteAccount() {
+    try {
+      await api.users.deleteAccount();
+      await supabase.auth.signOut();
+      router.replace('/(auth)/login');
+    } catch (err: any) {
+      Alert.alert('Could not delete account', err.message);
+    }
+  }
+
   async function load() {
     try {
       const [me, myTrophies, myEntries] = await Promise.all([
@@ -152,6 +177,11 @@ export default function ProfileScreen() {
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
+
+        {/* Delete account */}
+        <TouchableOpacity style={styles.deleteBtn} onPress={confirmDeleteAccount}>
+          <Text style={styles.deleteText}>Delete Account</Text>
         </TouchableOpacity>
 
         {/* My Entries */}
@@ -403,6 +433,8 @@ const styles = StyleSheet.create({
 
   legalBtn: { paddingVertical: 10, alignItems: 'center' },
   legalText: { color: '#333', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
+  deleteBtn: { paddingVertical: 10, alignItems: 'center' },
+  deleteText: { color: '#3a1111', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
   signOutBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a' },
   signOutText: { color: '#444', fontSize: 14, fontWeight: '600' },
 
