@@ -184,14 +184,20 @@ export default function ComposeScreen() {
         )}
 
         {mediaUri && (
-          <TextInput
-            style={styles.captionInput}
-            placeholder="Add a caption..."
-            placeholderTextColor="#444"
-            value={caption}
-            onChangeText={setCaption}
-            maxLength={200}
-          />
+          <View style={styles.captionSection}>
+            <Text style={styles.captionLabel}>CAPTION</Text>
+            <TextInput
+              style={styles.captionInput}
+              placeholder="Say something about this..."
+              placeholderTextColor="#444"
+              value={caption}
+              onChangeText={t => setCaption(t.slice(0, 300))}
+              maxLength={300}
+              multiline
+              autoFocus
+            />
+            <Text style={styles.captionCount}>{caption.length}/300</Text>
+          </View>
         )}
 
         {!mediaUri && (
@@ -268,13 +274,21 @@ const styles = StyleSheet.create({
   },
   videoBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
 
-  captionInput: {
-    color: '#fff',
-    fontSize: 15,
-    padding: 20,
+  captionSection: {
     borderTopWidth: 1,
     borderTopColor: '#111',
+    padding: 20,
+    gap: 10,
   },
+  captionLabel: { fontSize: 10, fontWeight: '800', color: '#444', letterSpacing: 3 },
+  captionInput: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 24,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  captionCount: { fontSize: 11, color: '#333', textAlign: 'right' },
 
   toolbar: {
     flexDirection: 'row',
