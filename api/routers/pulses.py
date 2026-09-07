@@ -108,7 +108,7 @@ async def get_pulse_mosaic(pulse_id: UUID, db: AsyncSession = Depends(get_db)):
         text("""
             SELECT pe.id::text, pe.content_type, pe.text_content,
                    pe.media_url, pe.vote_count,
-                   u.username, u.display_name
+                   pe.user_id::text, u.username, u.display_name
             FROM mosaics m
             JOIN LATERAL unnest(m.entry_ids) WITH ORDINALITY AS t(entry_id, ord) ON TRUE
             JOIN pulse_entries pe ON pe.id = t.entry_id

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,7 @@ export default function HomeScreen() {
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [lastPulse, setLastPulse] = useState<ResolvedPulse | null>(null);
   const [mosaic, setMosaic] = useState<MosaicEntry[]>([]);
+  const [selectedTile, setSelectedTile] = useState<MosaicEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -171,7 +173,7 @@ export default function HomeScreen() {
           {mosaic.length > 0 ? (
             <View style={styles.mosaicGrid}>
               {mosaic.map((entry) => (
-                <MosaicTile key={entry.id} entry={entry} />
+                <MosaicTile key={entry.id} entry={entry} onPress={() => setSelectedTile(entry)} />
               ))}
             </View>
           ) : (
@@ -180,6 +182,34 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+      )}
+      {/* Mosaic entry modal */}
+      {selectedTile && (
+        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedTile(null)}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setSelectedTile(null)}>
+                <Text style={styles.modalClose}>Close</Text>
+              </TouchableOpacity>
+              {selectedTile.username && (
+                <TouchableOpacity onPress={() => { setSelectedTile(null); router.push(`/user/${selectedTile.user_id}`); }}>
+                  <Text style={styles.modalUsername}>@{selectedTile.username} →</Text>
+                </TouchableOpacity>
+              )}
+              <View style={{ width: 48 }} />
+            </View>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              {selectedTile.media_url ? (
+                <Image source={{ uri: selectedTile.media_url }} style={styles.modalImage} resizeMode="cover" />
+              ) : selectedTile.text_content ? (
+                <View style={styles.modalTextBox}>
+                  <Text style={styles.modalText}>{selectedTile.text_content}</Text>
+                </View>
+              ) : null}
+              <Text style={styles.modalVotes}>{selectedTile.vote_count} votes</Text>
+            </ScrollView>
+          </View>
+        </Modal>
       )}
     </ScrollView>
   );
@@ -212,20 +242,20 @@ function PulseBanner({ pulse }: { pulse: Pulse }) {
   );
 }
 
-function MosaicTile({ entry }: { entry: MosaicEntry }) {
+function MosaicTile({ entry, onPress }: { entry: MosaicEntry; onPress: () => void }) {
   if (entry.media_url) {
     return (
-      <View style={styles.mosaicTile}>
+      <TouchableOpacity style={styles.mosaicTile} onPress={onPress} activeOpacity={0.8}>
         <Image source={{ uri: entry.media_url }} style={styles.mosaicTileImage} />
-      </View>
+      </TouchableOpacity>
     );
   }
   return (
-    <View style={[styles.mosaicTile, styles.mosaicTileText]}>
+    <TouchableOpacity style={[styles.mosaicTile, styles.mosaicTileText]} onPress={onPress} activeOpacity={0.8}>
       <Text style={styles.mosaicTileTextContent} numberOfLines={4}>
         {entry.text_content}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -326,4 +356,14 @@ const styles = StyleSheet.create({
   mosaicTileTextContent: { fontSize: 8, color: '#666', lineHeight: 11 },
   mosaicEmpty: { paddingVertical: 20, alignItems: 'center' },
   mosaicEmptyText: { fontSize: 13, color: '#333' },
+
+  modal: { flex: 1, backgroundColor: '#000' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  modalClose: { color: '#555', fontSize: 15, width: 48 },
+  modalUsername: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  modalContent: { padding: 20, gap: 16 },
+  modalImage: { width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 },
+  modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
+  modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  modalVotes: { fontSize: 13, color: '#444', fontWeight: '600' },
 });

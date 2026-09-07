@@ -54,6 +54,7 @@ export interface ResolvedPulse {
 
 export interface MosaicEntry {
   id: string;
+  user_id: string;
   content_type: 'text' | 'photo' | 'video';
   text_content: string | null;
   media_url: string | null;

@@ -104,6 +104,13 @@ export const api = {
       apiFetch(`/trophies/${userId}`, {}, false),
   },
 
+  // ─── Reports ──────────────────────────────────────────────────────────────
+
+  reports: {
+    flag: (entryId: string): Promise<void> =>
+      apiFetch('/reports', { method: 'POST', body: JSON.stringify({ entry_id: entryId }) }),
+  },
+
   // ─── Admin ────────────────────────────────────────────────────────────────
 
   admin: {

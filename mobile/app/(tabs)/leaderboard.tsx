@@ -17,7 +17,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useFocusEffect } from 'expo-router';
 import { api } from '@/lib/api';
 import { LEADERBOARD_POLL_MS } from '@/constants/config';
-import type { Pulse, Entry, LeaderboardEntry } from '@/lib/types';
+import type { Pulse, Entry, LeaderboardEntry, ResolvedPulse } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
 export default function LeaderboardScreen() {
@@ -27,6 +27,8 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [votingInFlight, setVotingInFlight] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<(Entry & { rank: number }) | null>(null);
+  const [lastResolved, setLastResolved] = useState<ResolvedPulse | null>(null);
+  const [lastEntries, setLastEntries] = useState<Entry[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function load() {
@@ -41,6 +43,14 @@ export default function LeaderboardScreen() {
         ]);
         setLeaderboard(lb);
         setEntries(ents);
+      } else {
+        // No active pulse — load last resolved for historical view
+        const resolved = await api.pulses.resolved();
+        if (resolved.length > 0) {
+          setLastResolved(resolved[0]);
+          const ents = await api.pulses.entries(resolved[0].id);
+          setLastEntries(ents.sort((a, b) => b.vote_count - a.vote_count));
+        }
       }
     } catch {}
     finally { setLoading(false); }
@@ -119,11 +129,48 @@ export default function LeaderboardScreen() {
   }
 
   if (!pulse || pulse.status === 'resolved' || pulse.status === 'resolving') {
+    if (!lastResolved) {
+      return (
+        <View style={styles.center}>
+          <Text style={styles.emptyIcon}>▲</Text>
+          <Text style={styles.emptyTitle}>No Pulse active</Text>
+          <Text style={styles.emptyText}>Rankings appear here when a Pulse is live.</Text>
+        </View>
+      );
+    }
+    const rankedLast = lastEntries.map((e, i) => ({ ...e, rank: i + 1 }));
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyIcon}>▲</Text>
-        <Text style={styles.emptyTitle}>No Pulse active</Text>
-        <Text style={styles.emptyText}>Rankings and voting appear here{'\n'}when a Pulse is live.</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>Last Pulse</Text>
+            {lastResolved.winner_username && (
+              <Text style={styles.headerCity}>Won by @{lastResolved.winner_username}</Text>
+            )}
+          </View>
+        </View>
+        <Text style={styles.prompt} numberOfLines={3}>"{lastResolved.prompt}"</Text>
+        <FlatList
+          data={rankedLast}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <EntryCard
+              entry={item}
+              onVote={() => {}}
+              onPress={() => setSelectedEntry(item)}
+              voteInFlight={false}
+              canVote={false}
+            />
+          )}
+        />
+        <EntryModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          onVote={() => {}}
+          voteInFlight={false}
+          canVote={false}
+        />
       </View>
     );
   }
@@ -250,7 +297,18 @@ function EntryModal({
   voteInFlight: boolean;
   canVote: boolean;
 }) {
+  const [reported, setReported] = useState(false);
+
   if (!entry) return null;
+
+  async function handleReport() {
+    if (reported || !entry) return;
+    try {
+      await api.reports.flag(entry.id);
+      setReported(true);
+    } catch {}
+  }
+
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.modal}>
@@ -261,7 +319,11 @@ function EntryModal({
           <Text style={styles.modalRank}>
             {entry.rank === 1 ? '① Ranked #1' : `Ranked #${entry.rank}`}
           </Text>
-          <View style={{ width: 48 }} />
+          <TouchableOpacity onPress={handleReport} disabled={reported}>
+            <Text style={[styles.modalFlag, reported && styles.modalFlagDone]}>
+              {reported ? 'Reported' : 'Flag'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView contentContainerStyle={styles.modalContent}>
@@ -353,6 +415,8 @@ const styles = StyleSheet.create({
   modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
   modalMeta: { flexDirection: 'row', gap: 16 },
   modalVoteCount: { fontSize: 13, color: '#444', fontWeight: '600' },
+  modalFlag: { color: '#555', fontSize: 13, fontWeight: '600', width: 56, textAlign: 'right' },
+  modalFlagDone: { color: '#333' },
   modalVoteBtn: { margin: 16, borderRadius: 12, paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   modalVoteBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
   modalVoteBtnText: { color: '#666', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
