@@ -499,3 +499,40 @@ HEAT_DECAY_HALF_LIFE_HOURS=6
 ---
 
 *This stack document reflects Phase 1 (free-tier, MVP-first). Build the Pulse loop. Prove D7 retention. Add complexity only when the product earns it. Next: `migrations/0001_initial_schema.sql`, repository scaffolding, FastAPI skeleton.*
+
+---
+
+## Build-Time Decisions (added 2026-09-07)
+
+These decisions were made or confirmed during the initial build sprint. They augment the design-era choices above.
+
+### Database connection: session-mode pooler required
+
+**`DATABASE_URL` must use port 5432 (session mode), NOT port 6543 (transaction mode).**
+
+SQLAlchemy's asyncpg dialect uses prepared statements internally. pgbouncer in transaction mode does not support prepared statements — connections are reused mid-session and statement handles are lost, causing `DuplicatePreparedStatementError`.
+
+Session-mode pooler (port 5432) holds the connection for the client's logical session, making prepared statements safe. This is the correct pooler for a server-side FastAPI app with SQLAlchemy.
+
+See ADR-003 in DECISIONS.md.
+
+### Worker DB driver: psycopg2-binary
+
+RQ workers are synchronous. asyncpg is an async driver and cannot be used in a sync context. Workers use `psycopg2-binary==2.9.9`.
+
+Workers obtain the sync DB URL with:
+```python
+settings.database_url.replace("+asyncpg", "")
+```
+
+See ADR-006 in DECISIONS.md.
+
+### JWT verification: PyJWT + JWKS client
+
+New Supabase projects sign JWTs with ECC P-256 / ES256. Replaced `python-jose` (HS256-only in practice) with `PyJWT[crypto]` and `PyJWKClient` for automatic JWKS key fetching and caching.
+
+See ADR-005 in DECISIONS.md.
+
+### SQLAlchemy: raw text() queries, no ORM models
+
+The schema has 40 tables with PostGIS and complex relationships. Raw `text()` queries are more readable and debuggable than ORM models for this schema complexity. No SQLAlchemy model classes are defined — only the `Base` declarative class for potential future use.

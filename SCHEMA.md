@@ -1,12 +1,15 @@
 # Sösh — Database Schema
 **Version:** 0.1
-**Status:** In Progress
+**Status:** Locked — design phase closed 2026-09-06
 **Depends on:** DESIGN.md v0.1, FLOWS.md v0.1
 **Last Updated:** 2026-09-06
 
 ---
 
 ## Overview
+
+> **Implementation note (2026-09-07):** This document reflects the design-era schema. During implementation, several field names were changed to align with API code conventions. The authoritative schema is `migrations/0001_initial_schema.sql`. Key changes: `prompt_text` → `prompt`, `submission_closes_at` → `submission_ends_at`, `voting_closes_at` → `voting_ends_at`, `voter_user_id` → `voter_id`, `country` → `country_code`, `total_score` → `score`. When in doubt, the migration file wins.
+
 
 This document defines the full data schema for Sösh. Every table here corresponds to a data object identified in FLOWS.md. Where a design decision affects the schema, the rationale is documented inline.
 

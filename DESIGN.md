@@ -1,8 +1,8 @@
 # Sösh — Product Design Document
-**Version:** 0.1 (Brainstorm Capture)
-**Status:** In Progress — not locked
+**Version:** 0.1
+**Status:** Locked — design phase closed 2026-09-06
 **Contributors:** Captain (human), V.E.R.N. (Gemma), Claude (Anthropic)
-**Last Updated:** 2026-09-06
+**Last Updated:** 2026-09-07
 
 ---
 
