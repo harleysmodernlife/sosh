@@ -4,7 +4,6 @@ Pulse entry submission and reporting.
 POST /entries          — submit a new entry for the active pulse
 POST /entries/{id}/reports — report an entry for moderation
 """
-import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -14,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import AuthenticatedUser, get_current_user
+from config import settings
 from database import get_db
 from redis_client import redis
 from services.moderation import is_text_safe
@@ -85,12 +85,13 @@ async def submit_entry(
                 detail="Content did not pass moderation",
             )
 
-    # Build media_url from key if provided
+    # Build public media_url from key if provided
     media_url = None
     if body.media_key:
-        r2_endpoint = os.getenv("R2_ENDPOINT", "")
-        bucket = os.getenv("R2_BUCKET_NAME", "sosh-media")
-        media_url = f"{r2_endpoint}/{bucket}/{body.media_key}"
+        media_url = (
+            f"{settings.supabase_url}/storage/v1/object/public"
+            f"/sosh-media/{body.media_key}"
+        )
 
     entry_id = uuid4()
     await db.execute(
