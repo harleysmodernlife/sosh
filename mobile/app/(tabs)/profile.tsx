@@ -144,6 +144,11 @@ export default function ProfileScreen() {
           <Text style={styles.scoreSmallValue}>{user?.sosh_score ?? 0}</Text>
         </View>
 
+        {/* Legal */}
+        <TouchableOpacity style={styles.legalBtn} onPress={() => router.push('/legal')}>
+          <Text style={styles.legalText}>Terms & Privacy</Text>
+        </TouchableOpacity>
+
         {/* Sign out */}
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign out</Text>
@@ -396,6 +401,8 @@ const styles = StyleSheet.create({
   trophyEntryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   trophyEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
 
+  legalBtn: { paddingVertical: 10, alignItems: 'center' },
+  legalText: { color: '#333', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
   signOutBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a' },
   signOutText: { color: '#444', fontSize: 14, fontWeight: '600' },
 

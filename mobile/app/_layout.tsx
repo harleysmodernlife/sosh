@@ -107,6 +107,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
         <Stack.Screen name="admin" />
         <Stack.Screen name="user/[id]" />
+        <Stack.Screen name="legal" />
       </Stack>
     </>
   );
