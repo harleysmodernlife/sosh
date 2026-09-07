@@ -56,11 +56,11 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={styles.profileInfo}>
+            {user?.display_name
+              ? <Text style={styles.displayName}>{user.display_name}</Text>
+              : null}
             <Text style={styles.username}>@{user?.username ?? '—'}</Text>
-            {user?.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
-            {user?.city && (
-              <Text style={styles.location}>{user.city}{user.country_code ? `, ${user.country_code}` : ''}</Text>
-            )}
+            {user?.city && <Text style={styles.location}>{user.city}</Text>}
           </View>
           <View style={styles.headerActions}>
             {user?.is_admin && (
@@ -161,7 +161,6 @@ function EditProfileModal({
 }) {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [city, setCity] = useState(user?.city ?? '');
-  const [countryCode, setCountryCode] = useState(user?.country_code ?? '');
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -170,7 +169,6 @@ function EditProfileModal({
       const updated = await api.users.update({
         display_name: displayName || undefined,
         city: city || undefined,
-        country_code: countryCode.toUpperCase().slice(0, 2) || undefined,
       });
       onSave(updated);
     } catch (err: any) {
@@ -204,10 +202,11 @@ function EditProfileModal({
               style={styles.fieldInput}
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Your name"
+              placeholder="How you want to be known"
               placeholderTextColor="#444"
               maxLength={50}
             />
+            <Text style={styles.fieldHint}>Shown on your entries alongside @{user?.username}</Text>
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>CITY</Text>
@@ -217,20 +216,10 @@ function EditProfileModal({
               onChangeText={setCity}
               placeholder="Nashville"
               placeholderTextColor="#444"
+              autoCapitalize="words"
               maxLength={100}
             />
-          </View>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>COUNTRY CODE</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={countryCode}
-              onChangeText={setCountryCode}
-              placeholder="US"
-              placeholderTextColor="#444"
-              maxLength={2}
-              autoCapitalize="characters"
-            />
+            <Text style={styles.fieldHint}>Your city leaderboard — contact support to change</Text>
           </View>
         </View>
       </View>
@@ -247,9 +236,9 @@ const styles = StyleSheet.create({
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   avatarLetter: { fontSize: 26, fontWeight: '800', color: '#fff' },
   profileInfo: { flex: 1, gap: 2 },
-  username: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  displayName: { fontSize: 14, color: '#888' },
-  location: { fontSize: 13, color: '#555' },
+  displayName: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  username: { fontSize: 13, color: '#555' },
+  location: { fontSize: 13, color: '#444' },
   headerActions: { flexDirection: 'row', gap: 8 },
   adminBtn: { backgroundColor: '#1a1a0a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#443' },
   adminBtnText: { color: '#cc0', fontSize: 13, fontWeight: '600' },
@@ -293,4 +282,5 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 8 },
   fieldLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
   fieldInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, color: '#fff', fontSize: 16 },
+  fieldHint: { fontSize: 11, color: '#333', marginTop: 2 },
 });

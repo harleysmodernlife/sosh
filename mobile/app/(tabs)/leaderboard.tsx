@@ -251,7 +251,14 @@ function EntryCard({
         </Text>
       </View>
       <View style={styles.cardContent}>
-        <Text style={styles.username}>@{entry.username}</Text>
+        <View style={styles.entryMeta}>
+          <Text style={styles.username}>
+            {entry.display_name ?? `@${entry.username}`}
+          </Text>
+          {entry.display_name && (
+            <Text style={styles.usernameHandle}>@{entry.username}</Text>
+          )}
+        </View>
         {entry.text_content ? (
           <Text style={styles.entryText}>{entry.text_content}</Text>
         ) : entry.media_url ? (
@@ -328,7 +335,12 @@ function EntryModal({
 
         <ScrollView contentContainerStyle={styles.modalContent}>
           <TouchableOpacity onPress={() => { onClose(); router.push(`/user/${entry.user_id}`); }}>
-            <Text style={styles.modalUsername}>@{entry.username} →</Text>
+            <Text style={styles.modalUsername}>
+              {entry.display_name ?? `@${entry.username}`} →
+            </Text>
+            {entry.display_name && (
+              <Text style={styles.modalUsernameHandle}>@{entry.username}</Text>
+            )}
           </TouchableOpacity>
 
           {entry.media_url ? (
@@ -389,7 +401,9 @@ const styles = StyleSheet.create({
   rankNum: { fontSize: 13, fontWeight: '800', color: '#3a3a3a' },
   rankNumFirst: { color: '#cc0', fontSize: 16 },
   cardContent: { flex: 1, padding: 14, gap: 6 },
-  username: { fontSize: 12, color: '#555', fontWeight: '700', letterSpacing: 0.3 },
+  entryMeta: { gap: 1 },
+  username: { fontSize: 13, color: '#ccc', fontWeight: '700' },
+  usernameHandle: { fontSize: 11, color: '#444' },
   entryText: { fontSize: 16, color: '#ddd', lineHeight: 23 },
   entryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
   voteBtn: { width: 64, justifyContent: 'center', alignItems: 'center', gap: 2, borderLeftWidth: 1, borderLeftColor: '#1a1a1a' },
@@ -409,7 +423,8 @@ const styles = StyleSheet.create({
   modalClose: { color: '#555', fontSize: 15, width: 48 },
   modalRank: { fontSize: 14, fontWeight: '800', color: '#888', letterSpacing: 1 },
   modalContent: { padding: 20, gap: 16, paddingBottom: 40 },
-  modalUsername: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  modalUsername: { fontSize: 17, fontWeight: '800', color: '#fff' },
+  modalUsernameHandle: { fontSize: 12, color: '#555', marginTop: 1 },
   modalImage: { aspectRatio: 4 / 3, borderRadius: 12 },
   modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
