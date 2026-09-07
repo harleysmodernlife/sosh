@@ -9,7 +9,7 @@ A background job (workers/vote_flush.py) flushes Redis → PostgreSQL every 10 s
 """
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
 from redis_client import redis
+from services.push import send_milestone_notification
 
 router = APIRouter()
+
+VOTE_MILESTONES = {5, 10, 25, 50, 100}
+MILESTONE_TTL = 60 * 60 * 24 * 7  # 7 days — long enough to outlast any Pulse
 
 
 class CastVoteRequest(BaseModel):
@@ -28,6 +32,7 @@ class CastVoteRequest(BaseModel):
 @router.post("", status_code=status.HTTP_204_NO_CONTENT)
 async def cast_vote(
     body: CastVoteRequest,
+    background_tasks: BackgroundTasks,
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -84,9 +89,28 @@ async def cast_vote(
             detail="You have already voted for this entry",
         )
 
-    # Increment Redis leaderboard score
+    # Increment Redis leaderboard score and check for milestone
     leaderboard_key = f"leaderboard:{entry['pulse_id']}"
-    await redis.zincrby(leaderboard_key, 1, str(body.entry_id))
+    new_score = int(await redis.zincrby(leaderboard_key, 1, str(body.entry_id)))
+
+    if new_score in VOTE_MILESTONES:
+        milestone_key = f"milestone:{body.entry_id}:{new_score}"
+        claimed = await redis.set(milestone_key, "1", nx=True, ex=MILESTONE_TTL)
+        if claimed:
+            token_row = await db.execute(
+                text("""
+                    SELECT u.push_token
+                    FROM pulse_entries pe
+                    JOIN users u ON u.id = pe.user_id
+                    WHERE pe.id = :entry_id AND u.push_token IS NOT NULL
+                """),
+                {"entry_id": body.entry_id},
+            )
+            push_token = token_row.scalar()
+            if push_token:
+                background_tasks.add_task(
+                    send_milestone_notification, push_token, new_score, str(body.entry_id)
+                )
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)

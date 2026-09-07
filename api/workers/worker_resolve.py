@@ -2,14 +2,17 @@
 RQ job: resolve a Pulse.
 
 Steps:
-1. Mark pulse status = 'resolved'
-2. Find the entry with the highest vote_count per city
-3. Create a trophy record for the winner
-4. Refresh vote_count on all entries from Redis
-5. Generate the Mosaic (top 20 entries globally by vote count)
-6. Update leaderboard_results table
-7. Send winner push notification
-8. Recalculate winner's Sösh Score
+1. Mark pulse status = 'resolving'
+2. Flush Redis vote counts → pulse_entries.vote_count in DB
+3. Find the entry with the highest vote_count (winner)
+4. Create a trophy for the winner
+5. Upsert leaderboard_results
+6. Recalculate Sösh Score for ALL participants (entrants + voters)
+   Formula: trophies×100 + entries×10 + votes_received×2 + votes_cast×1
+7. Generate Mosaic (top 20 entries by vote count)
+8. Mark pulse = 'resolved'
+9. Send winner push notification
+10. Expire Redis leaderboard key (keep 24h for straggler polls)
 """
 import psycopg2
 import redis as sync_redis
@@ -85,15 +88,44 @@ def resolve_pulse(pulse_id: str) -> None:
                     (str(uuidlib.uuid4()), pulse_id, entry_id, user_id, vote_count, city, country_code),
                 )
 
-                # 6. Recalculate Sösh Score (MVP formula: trophy_count * 10)
+            # 6. Recalculate Sösh Score for all Pulse participants
+            #    Formula:  trophies × 100
+            #            + approved entries × 10
+            #            + total votes received × 2
+            #            + total votes cast × 1
+            cur.execute(
+                """
+                SELECT DISTINCT uid FROM (
+                    SELECT user_id::text AS uid FROM pulse_entries WHERE pulse_id = %s
+                    UNION
+                    SELECT v.voter_id::text AS uid
+                    FROM votes v
+                    JOIN pulse_entries pe ON pe.id = v.entry_id
+                    WHERE pe.pulse_id = %s
+                ) participants
+                """,
+                (pulse_id, pulse_id),
+            )
+            participant_ids = [row[0] for row in cur.fetchall()]
+
+            for uid in participant_ids:
                 cur.execute(
                     """
-                    UPDATE sosh_score_snapshots
-                    SET score = (SELECT COUNT(*) FROM trophies WHERE user_id = %s) * 10,
-                        updated_at = now()
-                    WHERE user_id = %s
+                    INSERT INTO sosh_score_snapshots (user_id, score, updated_at)
+                    VALUES (
+                        %s,
+                        (SELECT COALESCE(COUNT(*), 0) FROM trophies WHERE user_id = %s::uuid) * 100
+                        + (SELECT COALESCE(COUNT(*), 0) FROM pulse_entries
+                           WHERE user_id = %s::uuid AND moderation_status = 'approved') * 10
+                        + (SELECT COALESCE(SUM(vote_count), 0) FROM pulse_entries
+                           WHERE user_id = %s::uuid AND moderation_status = 'approved') * 2
+                        + (SELECT COALESCE(COUNT(*), 0) FROM votes WHERE voter_id = %s::uuid),
+                        now()
+                    )
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET score = EXCLUDED.score, updated_at = now()
                     """,
-                    (user_id, user_id),
+                    (uid, uid, uid, uid, uid),
                 )
 
                 # 7. Get push token for winner notification

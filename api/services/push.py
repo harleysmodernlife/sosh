@@ -51,6 +51,24 @@ def send_pulse_notification(push_tokens: list[str], prompt: str, pulse_id: str) 
         raise
 
 
+def send_milestone_notification(push_token: str, vote_count: int, entry_id: str) -> None:
+    """Notify an entry author that their entry hit a vote milestone."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=f"Your entry hit {vote_count} votes!",
+                body="People are loving your response. Keep climbing.",
+                data={"type": "milestone", "entry_id": entry_id},
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:
