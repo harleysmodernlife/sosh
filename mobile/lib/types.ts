@@ -38,6 +38,29 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
+export interface ResolvedPulse {
+  id: string;
+  prompt: string;
+  city: string | null;
+  country_code: string | null;
+  resolved_at: string;
+  winner_id: string | null;
+  winner_username: string | null;
+  winner_display_name: string | null;
+  winner_votes: number | null;
+  has_mosaic: boolean;
+}
+
+export interface MosaicEntry {
+  id: string;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  vote_count: number;
+  username: string | null;
+  display_name: string | null;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

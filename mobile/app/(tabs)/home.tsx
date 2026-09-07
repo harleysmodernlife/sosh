@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,31 +7,48 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
-import type { User, Pulse, Trophy } from '@/lib/types';
+import type { User, Pulse, Trophy, ResolvedPulse, MosaicEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const TILE_SIZE = (SCREEN_WIDTH - 40 - 9) / 4; // 4 cols, 3 gaps of 3px, outer padding 20
 
 export default function HomeScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [pulse, setPulse] = useState<Pulse | null>(null);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
+  const [lastPulse, setLastPulse] = useState<ResolvedPulse | null>(null);
+  const [mosaic, setMosaic] = useState<MosaicEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     try {
-      const [me, activePulse, myTrophies] = await Promise.all([
+      const [me, activePulse, myTrophies, resolved] = await Promise.all([
         api.users.me(),
         api.pulses.active(),
         api.trophies.mine(),
+        api.pulses.resolved(),
       ]);
       setUser(me);
       setPulse(activePulse);
       setTrophies(myTrophies);
+
+      const latest = resolved[0] ?? null;
+      setLastPulse(latest);
+      if (latest?.has_mosaic) {
+        const entries = await api.pulses.mosaic(latest.id);
+        setMosaic(entries);
+      } else {
+        setMosaic([]);
+      }
     } catch (err) {
       // Session may have expired — let root layout handle redirect
     } finally {
@@ -132,6 +149,38 @@ export default function HomeScreen() {
           </Text>
         </View>
       )}
+
+      {/* Mosaic — last resolved Pulse */}
+      {lastPulse && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>LAST PULSE</Text>
+          </View>
+          <View style={styles.mosaicMeta}>
+            <Text style={styles.mosaicPrompt} numberOfLines={2}>
+              "{lastPulse.prompt}"
+            </Text>
+            {lastPulse.winner_display_name || lastPulse.winner_username ? (
+              <Text style={styles.mosaicWinner}>
+                Won by @{lastPulse.winner_username ?? lastPulse.winner_display_name}
+                {lastPulse.winner_votes != null ? `  ·  ${lastPulse.winner_votes} votes` : ''}
+              </Text>
+            ) : null}
+          </View>
+
+          {mosaic.length > 0 ? (
+            <View style={styles.mosaicGrid}>
+              {mosaic.map((entry) => (
+                <MosaicTile key={entry.id} entry={entry} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.mosaicEmpty}>
+              <Text style={styles.mosaicEmptyText}>No entries yet.</Text>
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -160,6 +209,23 @@ function PulseBanner({ pulse }: { pulse: Pulse }) {
         </Text>
       </LinearGradient>
     </TouchableOpacity>
+  );
+}
+
+function MosaicTile({ entry }: { entry: MosaicEntry }) {
+  if (entry.media_url) {
+    return (
+      <View style={styles.mosaicTile}>
+        <Image source={{ uri: entry.media_url }} style={styles.mosaicTileImage} />
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.mosaicTile, styles.mosaicTileText]}>
+      <Text style={styles.mosaicTileTextContent} numberOfLines={4}>
+        {entry.text_content}
+      </Text>
+    </View>
   );
 }
 
@@ -231,4 +297,30 @@ const styles = StyleSheet.create({
   },
   emptyTrophiesText: { fontSize: 16, color: '#444' },
   emptyTrophiesHint: { fontSize: 13, color: '#333', textAlign: 'center' },
+
+  mosaicMeta: { gap: 4, marginBottom: 10 },
+  mosaicPrompt: { fontSize: 16, fontWeight: '700', color: '#fff', lineHeight: 22 },
+  mosaicWinner: { fontSize: 12, color: '#555' },
+  mosaicGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 3,
+  },
+  mosaicTile: {
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  mosaicTileImage: { width: '100%', height: '100%' },
+  mosaicTileText: {
+    padding: 4,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
+  },
+  mosaicTileTextContent: { fontSize: 8, color: '#666', lineHeight: 11 },
+  mosaicEmpty: { paddingVertical: 20, alignItems: 'center' },
+  mosaicEmptyText: { fontSize: 13, color: '#333' },
 });

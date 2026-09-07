@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, Pulse, Entry, LeaderboardEntry, Trophy } from './types';
+import type { User, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -65,6 +65,12 @@ export const api = {
 
     entries: (pulseId: string): Promise<Entry[]> =>
       apiFetch(`/pulses/${pulseId}/entries`),
+
+    resolved: (): Promise<ResolvedPulse[]> =>
+      apiFetch('/pulses/resolved', {}, false),
+
+    mosaic: (pulseId: string): Promise<MosaicEntry[]> =>
+      apiFetch(`/pulses/${pulseId}/mosaic`, {}, false),
   },
 
   // ─── Entries ───────────────────────────────────────────────────────────────

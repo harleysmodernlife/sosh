@@ -36,6 +36,31 @@ class LeaderboardEntry(BaseModel):
     rank: int
 
 
+@router.get("/resolved")
+async def get_resolved_pulses(db: AsyncSession = Depends(get_db)):
+    """Last 10 resolved pulses with winner info and mosaic presence flag."""
+    rows = await db.execute(
+        text("""
+            SELECT p.id::text, p.prompt, p.city, p.country_code,
+                   p.updated_at::text AS resolved_at,
+                   lr.user_id::text  AS winner_id,
+                   u.username        AS winner_username,
+                   u.display_name    AS winner_display_name,
+                   lr.vote_count     AS winner_votes,
+                   (m.id IS NOT NULL) AS has_mosaic
+            FROM pulses p
+            LEFT JOIN leaderboard_results lr
+                   ON lr.pulse_id = p.id AND lr.scope = 'city' AND lr.rank = 1
+            LEFT JOIN users u ON u.id = lr.user_id
+            LEFT JOIN mosaics m ON m.pulse_id = p.id
+            WHERE p.status = 'resolved'
+            ORDER BY p.updated_at DESC
+            LIMIT 10
+        """)
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
 @router.get("/active", response_model=PulseResponse | None)
 async def get_active_pulse(db: AsyncSession = Depends(get_db)):
     row = await db.execute(
@@ -71,6 +96,29 @@ async def get_pulse(pulse_id: UUID, db: AsyncSession = Depends(get_db)):
     if not pulse:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse not found")
     return dict(pulse)
+
+
+@router.get("/{pulse_id}/mosaic")
+async def get_pulse_mosaic(pulse_id: UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Returns the top 20 entries for a resolved pulse in mosaic order.
+    Entry IDs are stored as an ordered array in the mosaics table.
+    """
+    rows = await db.execute(
+        text("""
+            SELECT pe.id::text, pe.content_type, pe.text_content,
+                   pe.media_url, pe.vote_count,
+                   u.username, u.display_name
+            FROM mosaics m
+            JOIN LATERAL unnest(m.entry_ids) WITH ORDINALITY AS t(entry_id, ord) ON TRUE
+            JOIN pulse_entries pe ON pe.id = t.entry_id
+            JOIN users u ON u.id = pe.user_id
+            WHERE m.pulse_id = :pulse_id
+            ORDER BY t.ord
+        """),
+        {"pulse_id": pulse_id},
+    )
+    return [dict(r) for r in rows.mappings().all()]
 
 
 @router.get("/{pulse_id}/leaderboard", response_model=list[LeaderboardEntry])
