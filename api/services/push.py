@@ -95,6 +95,42 @@ def send_results_notification(push_tokens: list[str], pulse_id: str) -> None:
         pass
 
 
+def send_like_notification(push_token: str, liker_name: str, post_id: str) -> None:
+    """Notify a post author that someone liked their post."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=f"{liker_name} liked your post",
+                body="Tap to see it.",
+                data={"type": "like", "post_id": post_id},
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
+def send_comment_notification(push_token: str, commenter_name: str, post_id: str) -> None:
+    """Notify a post author that someone commented on their post."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=f"{commenter_name} commented on your post",
+                body="Tap to see it.",
+                data={"type": "comment", "post_id": post_id},
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:
