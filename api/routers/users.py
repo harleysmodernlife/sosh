@@ -1,7 +1,7 @@
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,6 +77,32 @@ async def get_my_profile(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return dict(user)
+
+
+@router.get("/search", response_model=list[UserProfile])
+async def search_users(
+    q: str = Query(..., min_length=1, max_length=50),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
+                   u.accent_color,
+                   COALESCE(s.score, 0) AS sosh_score,
+                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
+                   0 AS follower_count,
+                   0 AS following_count,
+                   FALSE AS viewer_is_following,
+                   FALSE AS is_admin
+            FROM users u
+            LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
+            WHERE u.username ILIKE :q OR u.display_name ILIKE :q
+            ORDER BY COALESCE(s.score, 0) DESC
+            LIMIT 30
+        """),
+        {"q": f"%{q}%"},
+    )
+    return [dict(r) for r in rows.mappings().all()]
 
 
 @router.get("/{user_id}", response_model=UserProfile)

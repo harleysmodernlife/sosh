@@ -46,6 +46,8 @@ export const api = {
 
     get: (userId: string): Promise<User> => apiFetch(`/users/${userId}`),
 
+    search: (q: string): Promise<User[]> => apiFetch(`/users/search?q=${encodeURIComponent(q)}`, {}, false),
+
     follow: (userId: string): Promise<void> =>
       apiFetch(`/users/${userId}/follow`, { method: 'POST' }),
 
