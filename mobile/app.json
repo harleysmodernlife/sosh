@@ -52,7 +52,8 @@
         {
           "locationWhenInUsePermission": "Sösh uses your location to place you in a city leaderboard."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

@@ -12,13 +12,16 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '@/lib/api';
 import type { Pulse, Entry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
-type CaptureMode = 'text' | 'photo';
+type CaptureMode = 'text' | 'photo' | 'video';
 type SubmitState = 'idle' | 'submitting' | 'submitted';
+
+const MAX_VIDEO_SECONDS = 30;
 
 export default function PulseScreen() {
   const [pulse, setPulse] = useState<Pulse | null>(null);
@@ -26,10 +29,14 @@ export default function PulseScreen() {
   const [mode, setMode] = useState<CaptureMode>('text');
   const [text, setText] = useState('');
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [myEntry, setMyEntry] = useState<Entry | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadPulse() {
     try {
@@ -45,6 +52,9 @@ export default function PulseScreen() {
     setSubmitState('idle');
     setText('');
     setCapturedPhoto(null);
+    setCapturedVideo(null);
+    setIsRecording(false);
+    setRecordingSeconds(0);
   }, []));
 
   const countdown = useCountdown(
@@ -55,6 +65,36 @@ export default function PulseScreen() {
     if (!cameraRef.current) return;
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
     if (photo) setCapturedPhoto(photo.uri);
+  }
+
+  async function startRecording() {
+    if (!cameraRef.current || isRecording) return;
+    setIsRecording(true);
+    setRecordingSeconds(0);
+
+    recordingTimer.current = setInterval(() => {
+      setRecordingSeconds(s => {
+        if (s + 1 >= MAX_VIDEO_SECONDS) {
+          stopRecording();
+        }
+        return s + 1;
+      });
+    }, 1000);
+
+    try {
+      const video = await cameraRef.current.recordAsync({ maxDuration: MAX_VIDEO_SECONDS });
+      if (video) setCapturedVideo(video.uri);
+    } catch {}
+  }
+
+  function stopRecording() {
+    if (!cameraRef.current || !isRecording) return;
+    cameraRef.current.stopRecording();
+    setIsRecording(false);
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
+      recordingTimer.current = null;
+    }
   }
 
   async function submit() {
@@ -71,13 +111,22 @@ export default function PulseScreen() {
           content_type: 'text',
           text_content: text.trim(),
         });
-      } else {
+      } else if (mode === 'photo') {
         if (!capturedPhoto) { Alert.alert('Take a photo first.'); setSubmitState('idle'); return; }
         const { upload_url, media_key } = await api.media.presign('image/jpeg', pulse.id);
         await api.media.upload(upload_url, capturedPhoto, 'image/jpeg');
         entry = await api.entries.submit({
           pulse_id: pulse.id,
           content_type: 'photo',
+          media_key,
+        });
+      } else {
+        if (!capturedVideo) { Alert.alert('Record a video first.'); setSubmitState('idle'); return; }
+        const { upload_url, media_key } = await api.media.presign('video/mp4', pulse.id);
+        await api.media.upload(upload_url, capturedVideo, 'video/mp4');
+        entry = await api.entries.submit({
+          pulse_id: pulse.id,
+          content_type: 'video',
           media_key,
         });
       }
@@ -122,6 +171,9 @@ export default function PulseScreen() {
     );
   }
 
+  const needCamera = mode === 'photo' || mode === 'video';
+  const hasCapture = mode === 'photo' ? !!capturedPhoto : mode === 'video' ? !!capturedVideo : false;
+
   return (
     <View style={styles.container}>
       {/* Top bar */}
@@ -137,25 +189,23 @@ export default function PulseScreen() {
 
       {/* Mode selector */}
       <View style={styles.modeSelector}>
-        <TouchableOpacity
-          style={[styles.modeTab, mode === 'text' && styles.modeTabActive]}
-          onPress={() => { setMode('text'); setCapturedPhoto(null); }}
-        >
-          <Text style={[styles.modeTabText, mode === 'text' && styles.modeTabTextActive]}>
-            Text
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeTab, mode === 'photo' && styles.modeTabActive]}
-          onPress={async () => {
-            if (!cameraPermission?.granted) await requestCameraPermission();
-            setMode('photo');
-          }}
-        >
-          <Text style={[styles.modeTabText, mode === 'photo' && styles.modeTabTextActive]}>
-            Photo
-          </Text>
-        </TouchableOpacity>
+        {(['text', 'photo', 'video'] as CaptureMode[]).map(m => (
+          <TouchableOpacity
+            key={m}
+            style={[styles.modeTab, mode === m && styles.modeTabActive]}
+            onPress={async () => {
+              if (m !== 'text' && !cameraPermission?.granted) await requestCameraPermission();
+              setMode(m);
+              setCapturedPhoto(null);
+              setCapturedVideo(null);
+              if (isRecording) stopRecording();
+            }}
+          >
+            <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Capture area */}
@@ -179,12 +229,35 @@ export default function PulseScreen() {
               <Text style={styles.retakeBtnText}>Retake</Text>
             </TouchableOpacity>
           </View>
+        ) : capturedVideo ? (
+          <VideoPreview uri={capturedVideo} onRetake={() => setCapturedVideo(null)} />
         ) : cameraPermission?.granted ? (
           <View style={styles.cameraContainer}>
-            <CameraView ref={cameraRef} style={styles.camera} facing="back" />
-            <TouchableOpacity style={styles.shutterBtn} onPress={takePhoto}>
-              <View style={styles.shutterInner} />
-            </TouchableOpacity>
+            <CameraView ref={cameraRef} style={styles.camera} facing="back" mode={mode === 'video' ? 'video' : 'picture'} />
+            {mode === 'photo' ? (
+              <TouchableOpacity style={styles.shutterBtn} onPress={takePhoto}>
+                <View style={styles.shutterInner} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.videoControls}>
+                {isRecording && (
+                  <View style={styles.recordingBadge}>
+                    <View style={styles.recordingDot} />
+                    <Text style={styles.recordingTimer}>
+                      {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')} / 0:30
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.shutterBtn, isRecording && styles.shutterBtnRecording]}
+                  onPress={isRecording ? stopRecording : startRecording}
+                >
+                  {isRecording
+                    ? <View style={styles.stopInner} />
+                    : <View style={styles.shutterInner} />}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.noPermission}>
@@ -201,17 +274,31 @@ export default function PulseScreen() {
         <Text style={styles.charCount}>{text.length}/140</Text>
       )}
 
-      {/* Submit */}
-      <TouchableOpacity
-        style={[styles.submitBtn, submitState === 'submitting' && styles.submitBtnDisabled]}
-        onPress={submit}
-        disabled={submitState === 'submitting'}
-      >
-        {submitState === 'submitting' ? (
-          <ActivityIndicator color="#000" />
-        ) : (
-          <Text style={styles.submitBtnText}>Submit</Text>
-        )}
+      {/* Submit — only shown when there's something to submit */}
+      {(mode === 'text' || hasCapture) && !isRecording && (
+        <TouchableOpacity
+          style={[styles.submitBtn, submitState === 'submitting' && styles.submitBtnDisabled]}
+          onPress={submit}
+          disabled={submitState === 'submitting'}
+        >
+          {submitState === 'submitting' ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text style={styles.submitBtnText}>Submit</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+function VideoPreview({ uri, onRetake }: { uri: string; onRetake: () => void }) {
+  const player = useVideoPlayer(uri, p => { p.loop = true; p.play(); });
+  return (
+    <View style={styles.previewContainer}>
+      <VideoView style={styles.preview} player={player} nativeControls={false} />
+      <TouchableOpacity style={styles.retakeBtn} onPress={onRetake}>
+        <Text style={styles.retakeBtnText}>Retake</Text>
       </TouchableOpacity>
     </View>
   );
@@ -232,7 +319,11 @@ function SubmittedView({ entry, pulse, countdown }: { entry: Entry; pulse: Pulse
         {entry.text_content ? (
           <Text style={styles.myEntryText}>{entry.text_content}</Text>
         ) : entry.media_url ? (
-          <Image source={{ uri: entry.media_url }} style={styles.myEntryImage} />
+          entry.content_type === 'video' ? (
+            <VideoPreview uri={entry.media_url} onRetake={() => {}} />
+          ) : (
+            <Image source={{ uri: entry.media_url }} style={styles.myEntryImage} />
+          )
         ) : null}
       </View>
       <TouchableOpacity style={styles.watchBoardBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
@@ -266,7 +357,14 @@ const styles = StyleSheet.create({
   cameraContainer: { flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' },
   camera: { flex: 1 },
   shutterBtn: { position: 'absolute', bottom: 20, alignSelf: 'center', width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#fff' },
+  shutterBtnRecording: { borderColor: '#ff4444', backgroundColor: 'rgba(255,68,68,0.2)' },
   shutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#fff' },
+  stopInner: { width: 28, height: 28, borderRadius: 4, backgroundColor: '#ff4444' },
+
+  videoControls: { position: 'absolute', bottom: 20, left: 0, right: 0, alignItems: 'center', gap: 12 },
+  recordingBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4444' },
+  recordingTimer: { color: '#fff', fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
 
   previewContainer: { flex: 1, position: 'relative', borderRadius: 12, overflow: 'hidden' },
   preview: { flex: 1 },
