@@ -491,8 +491,6 @@ function PostDetailModal({
         onClose={() => setShowComments(false)}
         onCountChange={delta => setCommentCount(c => c + delta)}
       />
-        </ScrollView>
-      </View>
     </Modal>
   );
 }
