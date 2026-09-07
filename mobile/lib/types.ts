@@ -1,0 +1,52 @@
+export interface User {
+  id: string;
+  username: string;
+  display_name: string | null;
+  city: string | null;
+  country_code: string | null;
+  sosh_score: number;
+  trophy_count: number;
+}
+
+export interface Pulse {
+  id: string;
+  prompt: string;
+  status: 'active' | 'voting' | 'resolving' | 'resolved';
+  submission_ends_at: string | null;
+  voting_ends_at: string | null;
+  city: string | null;
+  country_code: string | null;
+}
+
+export interface Entry {
+  id: string;
+  user_id: string;
+  pulse_id: string;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  vote_count: number;
+  created_at: string;
+  username: string;
+  display_name: string | null;
+  viewer_has_voted: boolean;
+}
+
+export interface LeaderboardEntry {
+  entry_id: string;
+  vote_count: number;
+  rank: number;
+}
+
+export interface Trophy {
+  id: string;
+  pulse_id: string;
+  awarded_at: string;
+  prompt: string;
+  city: string | null;
+  country_code: string | null;
+  content_type: 'text' | 'photo' | 'video';
+  text_content: string | null;
+  media_url: string | null;
+  vote_count: number;
+}
