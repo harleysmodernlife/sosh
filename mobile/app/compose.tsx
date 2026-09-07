@@ -70,27 +70,30 @@ export default function ComposeScreen() {
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => {
       setRecordingSeconds(s => {
-        if (s + 1 >= 30) stopRecording();
+        if (s + 1 >= 30) cameraRef.current?.stopRecording();
         return s + 1;
       });
     }, 1000);
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 30 });
-      if (video) {
+      if (video?.uri) {
         setMediaUri(video.uri);
         setMediaType('video');
-        setShowCamera(false);
       }
     } catch {}
+    finally {
+      setIsRecording(false);
+      setShowCamera(false);
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+        recordingTimer.current = null;
+      }
+    }
   }
 
   function stopRecording() {
     cameraRef.current?.stopRecording();
-    setIsRecording(false);
-    if (recordingTimer.current) {
-      clearInterval(recordingTimer.current);
-      recordingTimer.current = null;
-    }
+    // cleanup happens in startRecording's finally block
   }
 
   async function openCamera(type: MediaType) {
