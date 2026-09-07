@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
 
@@ -66,6 +67,13 @@ export default function ComposeScreen() {
 
   async function startRecording() {
     if (!cameraRef.current || isRecording) return;
+
+    const { status: micStatus } = await Audio.requestPermissionsAsync();
+    if (micStatus !== 'granted') {
+      Alert.alert('Microphone needed', 'Allow microphone access to record video.');
+      return;
+    }
+
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => {
@@ -74,16 +82,17 @@ export default function ComposeScreen() {
         return s + 1;
       });
     }, 1000);
+
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 30 });
       if (video?.uri) {
         setMediaUri(video.uri);
         setMediaType('video');
+        setShowCamera(false);
       }
     } catch {}
     finally {
       setIsRecording(false);
-      setShowCamera(false);
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
         recordingTimer.current = null;
@@ -93,7 +102,6 @@ export default function ComposeScreen() {
 
   function stopRecording() {
     cameraRef.current?.stopRecording();
-    // cleanup happens in startRecording's finally block
   }
 
   async function openCamera(type: MediaType) {
