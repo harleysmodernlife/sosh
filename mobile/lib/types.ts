@@ -7,6 +7,9 @@ export interface User {
   avatar_url: string | null;
   sosh_score: number;
   trophy_count: number;
+  follower_count: number;
+  following_count: number;
+  viewer_is_following: boolean;
   is_admin: boolean;
 }
 

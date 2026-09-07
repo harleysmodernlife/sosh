@@ -44,7 +44,13 @@ export const api = {
   users: {
     me: (): Promise<User> => apiFetch('/users/me'),
 
-    get: (userId: string): Promise<User> => apiFetch(`/users/${userId}`, {}, false),
+    get: (userId: string): Promise<User> => apiFetch(`/users/${userId}`),
+
+    follow: (userId: string): Promise<void> =>
+      apiFetch(`/users/${userId}/follow`, { method: 'POST' }),
+
+    unfollow: (userId: string): Promise<void> =>
+      apiFetch(`/users/${userId}/follow`, { method: 'DELETE' }),
 
     update: (data: { username?: string; display_name?: string; city?: string; country_code?: string; avatar_url?: string }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),

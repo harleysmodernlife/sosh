@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,9 @@ class UserProfile(BaseModel):
     avatar_url: str | None = None
     sosh_score: int
     trophy_count: int
+    follower_count: int = 0
+    following_count: int = 0
+    viewer_is_following: bool = False
     is_admin: bool = False
 
 
@@ -45,6 +48,9 @@ async def get_my_profile(
             SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
+                   (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
+                   (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
+                   FALSE AS viewer_is_following,
                    (EXISTS (SELECT 1 FROM user_roles WHERE user_id = u.id AND role = 'admin')) AS is_admin
             FROM users u
             LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
@@ -61,23 +67,73 @@ async def get_my_profile(
 @router.get("/{user_id}", response_model=UserProfile)
 async def get_user_profile(
     user_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    # Optionally resolve viewer from Authorization header (best-effort, no error if missing)
+    viewer_id = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            import jwt
+            from auth import _jwks_client
+            from config import settings as _s
+            token = auth_header[7:]
+            try:
+                signing_key = _jwks_client.get_signing_key_from_jwt(token)
+                payload = jwt.decode(token, signing_key.key, algorithms=["ES256", "RS256"], audience="authenticated")
+            except Exception:
+                payload = jwt.decode(token, _s.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
+            viewer_id = payload.get("sub")
+        except Exception:
+            pass
+
     row = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
                    COALESCE(s.score, 0) AS sosh_score,
-                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count
+                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
+                   (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
+                   (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
+                   (EXISTS (SELECT 1 FROM follows WHERE follower_id = :viewer_id AND following_id = u.id)) AS viewer_is_following
             FROM users u
             LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
             WHERE u.id = :user_id
         """),
-        {"user_id": user_id},
+        {"user_id": user_id, "viewer_id": str(viewer_id) if viewer_id else "00000000-0000-0000-0000-000000000000"},
     )
     user = row.mappings().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return dict(user)
+
+
+@router.post("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
+async def follow_user(
+    user_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if str(user_id) == current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot follow yourself")
+    await db.execute(
+        text("INSERT INTO follows (follower_id, following_id) VALUES (:follower, :following) ON CONFLICT DO NOTHING"),
+        {"follower": current_user.user_id, "following": user_id},
+    )
+    await db.commit()
+
+
+@router.delete("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
+async def unfollow_user(
+    user_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        text("DELETE FROM follows WHERE follower_id = :follower AND following_id = :following"),
+        {"follower": current_user.user_id, "following": user_id},
+    )
+    await db.commit()
 
 
 @router.patch("/me", response_model=UserProfile)

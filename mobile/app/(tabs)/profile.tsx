@@ -123,19 +123,25 @@ export default function ProfileScreen() {
         {/* Score */}
         <View style={styles.scoreRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statValue}>{user?.sosh_score ?? 0}</Text>
-            <Text style={styles.statLabel}>SÖSH SCORE</Text>
+            <Text style={styles.statValue}>{user?.follower_count ?? 0}</Text>
+            <Text style={styles.statLabel}>FOLLOWERS</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statValue}>{entries.length}</Text>
-            <Text style={styles.statLabel}>ENTRIES</Text>
+            <Text style={styles.statValue}>{user?.following_count ?? 0}</Text>
+            <Text style={styles.statLabel}>FOLLOWING</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{trophies.length}</Text>
             <Text style={styles.statLabel}>TROPHIES</Text>
           </View>
+        </View>
+
+        {/* Sösh Score */}
+        <View style={styles.scoreRowSmall}>
+          <Text style={styles.scoreSmallLabel}>SÖSH SCORE</Text>
+          <Text style={styles.scoreSmallValue}>{user?.sosh_score ?? 0}</Text>
         </View>
 
         {/* Sign out */}
@@ -346,10 +352,13 @@ const styles = StyleSheet.create({
   editBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   scoreRow: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
-  statBox: { flex: 1, padding: 20, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 36, fontWeight: '900', color: '#fff' },
-  statLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 2 },
-  statDivider: { width: 1, backgroundColor: '#1a1a1a', marginVertical: 16 },
+  statBox: { flex: 1, paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 4 },
+  statValue: { fontSize: 28, fontWeight: '900', color: '#fff' },
+  statLabel: { fontSize: 9, fontWeight: '700', color: '#444', letterSpacing: 1.5 },
+  statDivider: { width: 1, backgroundColor: '#1a1a1a', marginVertical: 14 },
+  scoreRowSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
+  scoreSmallLabel: { fontSize: 10, fontWeight: '700', color: '#333', letterSpacing: 2 },
+  scoreSmallValue: { fontSize: 16, fontWeight: '800', color: '#555' },
 
   section: { gap: 12 },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: '#444', letterSpacing: 3 },

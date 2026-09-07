@@ -18,6 +18,7 @@ export default function UserProfileScreen() {
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [followInFlight, setFollowInFlight] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -36,6 +37,34 @@ export default function UserProfileScreen() {
     }
     if (id) load();
   }, [id]);
+
+  async function toggleFollow() {
+    if (!user || followInFlight) return;
+    setFollowInFlight(true);
+    const wasFollowing = user.viewer_is_following;
+    // Optimistic update
+    setUser(u => u ? {
+      ...u,
+      viewer_is_following: !wasFollowing,
+      follower_count: u.follower_count + (wasFollowing ? -1 : 1),
+    } : u);
+    try {
+      if (wasFollowing) {
+        await api.users.unfollow(id);
+      } else {
+        await api.users.follow(id);
+      }
+    } catch {
+      // Revert on failure
+      setUser(u => u ? {
+        ...u,
+        viewer_is_following: wasFollowing,
+        follower_count: u.follower_count + (wasFollowing ? 1 : -1),
+      } : u);
+    } finally {
+      setFollowInFlight(false);
+    }
+  }
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
@@ -72,17 +101,29 @@ export default function UserProfileScreen() {
         </View>
         <Text style={styles.username}>@{user.username ?? '—'}</Text>
         {user.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
-        {user.city && (
-          <Text style={styles.location}>
-            {user.city}{user.country_code ? `, ${user.country_code}` : ''}
+        {user.city && <Text style={styles.location}>{user.city}</Text>}
+
+        <TouchableOpacity
+          style={[styles.followBtn, user.viewer_is_following && styles.followBtnActive]}
+          onPress={toggleFollow}
+          disabled={followInFlight}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
+            {user.viewer_is_following ? 'Following' : 'Follow'}
           </Text>
-        )}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.scoreRow}>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{user.sosh_score}</Text>
-          <Text style={styles.statLabel}>SÖSH SCORE</Text>
+          <Text style={styles.statValue}>{user.follower_count}</Text>
+          <Text style={styles.statLabel}>FOLLOWERS</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{user.following_count}</Text>
+          <Text style={styles.statLabel}>FOLLOWING</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
@@ -139,12 +180,16 @@ const styles = StyleSheet.create({
   back: { fontSize: 24, color: '#555' },
 
   profileHeader: { alignItems: 'center', gap: 6, paddingVertical: 8 },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 4, overflow: 'hidden' },
-  avatarImage: { width: 72, height: 72, borderRadius: 36 },
-  avatarLetter: { fontSize: 30, fontWeight: '800', color: '#fff' },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 4, overflow: 'hidden' },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  avatarLetter: { fontSize: 32, fontWeight: '800', color: '#fff' },
   username: { fontSize: 20, fontWeight: '800', color: '#fff' },
   displayName: { fontSize: 14, color: '#666' },
   location: { fontSize: 13, color: '#444' },
+  followBtn: { marginTop: 8, paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  followBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  followBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  followBtnTextActive: { color: '#000' },
 
   scoreRow: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
   statBox: { flex: 1, padding: 20, alignItems: 'center', gap: 4 },
