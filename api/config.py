@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_jwks_url: str = ""  # https://{ref}.supabase.co/auth/v1/.well-known/jwks.json
 
     # Database
     database_url: str = ""

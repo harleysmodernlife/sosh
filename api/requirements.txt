@@ -7,8 +7,8 @@ asyncpg==0.29.0
 sqlalchemy[asyncio]==2.0.35
 alembic==1.13.3
 
-# Auth — Supabase JWT verification
-python-jose[cryptography]==3.3.0
+# Auth — Supabase JWT verification (JWKS + ES256/HS256)
+PyJWT[crypto]==2.9.0
 python-multipart==0.0.12
 
 # Redis + job queue
