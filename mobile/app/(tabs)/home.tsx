@@ -40,7 +40,14 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const loadingMore = useRef(false);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: any[] }) => {
+    setVisibleKeys(new Set(viewableItems.map(v => v.key)));
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   async function load() {
     try {
@@ -119,11 +126,12 @@ export default function HomeScreen() {
       <FlatList
         data={items}
         keyExtractor={item => `${item.kind}-${item.data.id}`}
-        renderItem={({ item }) =>
-          item.kind === 'post'
-            ? <PostCard post={item.data} onLikeUpdate={handleLikeUpdate} />
-            : <EntryCard entry={item.data} />
-        }
+        renderItem={({ item }) => {
+          const key = `${item.kind}-${item.data.id}`;
+          return item.kind === 'post'
+            ? <PostCard post={item.data} onLikeUpdate={handleLikeUpdate} isVisible={visibleKeys.has(key)} />
+            : <EntryCard entry={item.data} isVisible={visibleKeys.has(key)} />;
+        }}
         ListHeaderComponent={<Header pulse={pulse} />}
         ListEmptyComponent={
           <View style={styles.emptyFeed}>
@@ -142,6 +150,8 @@ export default function HomeScreen() {
             <Text style={styles.feedEnd}>You're all caught up.</Text>
           ) : null
         }
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#fff" />}
@@ -205,9 +215,11 @@ function PulseBanner({ pulse }: { pulse: Pulse }) {
 function PostCard({
   post,
   onLikeUpdate,
+  isVisible,
 }: {
   post: Post;
   onLikeUpdate: (id: string, liked: boolean, count: number) => void;
+  isVisible: boolean;
 }) {
   const [liked, setLiked] = useState(post.viewer_has_liked);
   const [likeCount, setLikeCount] = useState(post.like_count);
@@ -256,7 +268,7 @@ function PostCard({
       </TouchableOpacity>
 
       {post.content_type !== 'text' && post.media_url ? (
-        <MediaView uri={post.media_url} type={post.content_type} style={styles.cardImage} />
+        <MediaView uri={post.media_url} type={post.content_type} style={styles.cardImage} isVisible={isVisible} />
       ) : post.text_content ? (
         <View style={styles.cardTextBox}>
           <Text style={styles.cardText}>{post.text_content}</Text>
@@ -277,7 +289,7 @@ function PostCard({
 
 // ─── Pulse entry card ─────────────────────────────────────────────────────────
 
-function EntryCard({ entry }: { entry: FeedEntry }) {
+function EntryCard({ entry, isVisible }: { entry: FeedEntry; isVisible: boolean }) {
   return (
     <TouchableOpacity
       style={styles.card}
@@ -292,7 +304,7 @@ function EntryCard({ entry }: { entry: FeedEntry }) {
       <Text style={styles.entryPrompt} numberOfLines={2}>"{entry.pulse_prompt}"</Text>
 
       {entry.media_url ? (
-        <MediaView uri={entry.media_url} type={entry.content_type} style={styles.cardImage} />
+        <MediaView uri={entry.media_url} type={entry.content_type} style={styles.cardImage} isVisible={isVisible} />
       ) : entry.text_content ? (
         <View style={styles.cardTextBox}>
           <Text style={styles.cardText}>{entry.text_content}</Text>
@@ -309,17 +321,27 @@ function EntryCard({ entry }: { entry: FeedEntry }) {
 
 // ─── Shared media renderer ────────────────────────────────────────────────────
 
-function MediaView({ uri, type, style }: { uri: string; type: string; style: object }) {
+function MediaView({ uri, type, style, isVisible }: { uri: string; type: string; style: object; isVisible: boolean }) {
+  const [paused, setPaused] = useState(false);
+  const playing = isVisible && !paused;
+
   if (type === 'video') {
     return (
-      <Video
-        source={{ uri }}
-        style={style}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay
-        isLooping
-        useNativeControls={false}
-      />
+      <TouchableOpacity onPress={() => setPaused(p => !p)} activeOpacity={1} style={style}>
+        <Video
+          source={{ uri }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={playing}
+          isLooping
+          useNativeControls={false}
+        />
+        {!playing && (
+          <View style={styles.pauseOverlay}>
+            <Text style={styles.pauseIcon}>▶</Text>
+          </View>
+        )}
+      </TouchableOpacity>
     );
   }
   return <Image source={{ uri }} style={style} resizeMode="cover" />;
@@ -391,6 +413,9 @@ const styles = StyleSheet.create({
   entryPrompt: { fontSize: 13, color: '#555', lineHeight: 19, paddingHorizontal: 16, fontStyle: 'italic' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 },
   entryVotes: { fontSize: 13, fontWeight: '700', color: '#333' },
+
+  pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
+  pauseIcon: { fontSize: 48, color: 'rgba(255,255,255,0.9)' },
 
   emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 14, paddingHorizontal: 40 },
   emptyIcon: { fontSize: 40, color: '#1a1a1a' },
