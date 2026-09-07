@@ -18,6 +18,7 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
@@ -34,13 +35,44 @@ export default function LoginScreen() {
           router.replace('/(tabs)/home');
         }
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
+        // Validate invite code before creating account
+        const code = inviteCode.trim().toUpperCase();
+        if (!code) {
+          Alert.alert('Invite required', 'Enter your invite code to create an account.');
+          return;
+        }
+        try {
+          await api.invites.validate(code);
+        } catch (err: any) {
+          const msg = err.message ?? '';
+          if (msg.includes('already used')) {
+            Alert.alert('Code already used', 'This invite code has already been claimed.');
+          } else if (msg.includes('expired')) {
+            Alert.alert('Code expired', 'This invite code has expired. Ask for a new one.');
+          } else {
+            Alert.alert('Invalid code', 'That invite code isn\'t valid. Check it and try again.');
+          }
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+
+        // Redeem invite code, tied to the new user
+        if (data.user) {
+          try {
+            await api.invites.redeem(code, data.user.id);
+          } catch {
+            // Non-fatal — account is created, just log and continue
+          }
+        }
+
         Alert.alert(
           'Check your email',
-          'We sent you a confirmation link. Once confirmed, sign in.',
+          'We sent a confirmation link. Once confirmed, sign back in.',
         );
         setMode('login');
+        setInviteCode('');
       }
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Something went wrong');
@@ -76,6 +108,22 @@ export default function LoginScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {mode === 'signup' && (
+          <View style={styles.inviteGroup}>
+            <TextInput
+              style={[styles.input, styles.inviteInput]}
+              placeholder="INVITE CODE"
+              placeholderTextColor="#444"
+              value={inviteCode}
+              onChangeText={t => setInviteCode(t.toUpperCase())}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={8}
+            />
+            <Text style={styles.inviteHint}>Sösh is invite-only. Need one? Ask a member.</Text>
+          </View>
+        )}
 
         <TextInput
           style={styles.input}
@@ -162,6 +210,20 @@ const styles = StyleSheet.create({
   },
   modeBtnTextActive: {
     color: '#000',
+  },
+  inviteGroup: {
+    gap: 6,
+  },
+  inviteInput: {
+    letterSpacing: 4,
+    fontWeight: '700',
+    textAlign: 'center',
+    fontSize: 18,
+  },
+  inviteHint: {
+    fontSize: 11,
+    color: '#333',
+    textAlign: 'center',
   },
   input: {
     backgroundColor: '#0d0d0d',

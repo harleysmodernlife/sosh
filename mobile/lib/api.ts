@@ -119,6 +119,22 @@ export const api = {
       apiFetch(`/feed?offset=${offset}&limit=${limit}`, {}, false),
   },
 
+  // ─── Invites ──────────────────────────────────────────────────────────────
+
+  invites: {
+    validate: (code: string): Promise<{ code: string; valid: boolean }> =>
+      apiFetch(`/invites/${code}`, {}, false),
+
+    redeem: (code: string, userId: string): Promise<void> =>
+      apiFetch(`/invites/${code}/redeem`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+
+    create: (label?: string, expiresDays?: number): Promise<{ code: string; label: string | null; expires_at: string | null }> =>
+      apiFetch('/admin/invites', { method: 'POST', body: JSON.stringify({ label, expires_days: expiresDays }) }),
+
+    list: (): Promise<{ id: string; code: string; label: string | null; created_at: string; expires_at: string | null; used_at: string | null; used_by_username: string | null }[]> =>
+      apiFetch('/admin/invites'),
+  },
+
   // ─── Reports ──────────────────────────────────────────────────────────────
 
   reports: {

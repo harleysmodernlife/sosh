@@ -10,10 +10,21 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Clipboard,
 } from 'react-native';
 import { router } from 'expo-router';
 import { api } from '@/lib/api';
 import type { Pulse } from '@/lib/types';
+
+type InviteRecord = {
+  id: string;
+  code: string;
+  label: string | null;
+  created_at: string;
+  expires_at: string | null;
+  used_at: string | null;
+  used_by_username: string | null;
+};
 
 export default function AdminScreen() {
   const [activePulse, setActivePulse] = useState<Pulse | null>(null);
@@ -28,6 +39,11 @@ export default function AdminScreen() {
   const [votingHours, setVotingHours] = useState('2');
   const [firing, setFiring] = useState(false);
   const [resolving, setResolving] = useState(false);
+
+  const [invites, setInvites] = useState<InviteRecord[]>([]);
+  const [loadingInvites, setLoadingInvites] = useState(true);
+  const [inviteLabel, setInviteLabel] = useState('');
+  const [creatingInvite, setCreatingInvite] = useState(false);
 
   const loadActive = useCallback(async () => {
     setLoadingPulse(true);
@@ -53,10 +69,43 @@ export default function AdminScreen() {
     }
   }, []);
 
+  const loadInvites = useCallback(async () => {
+    setLoadingInvites(true);
+    try {
+      setInvites(await api.invites.list());
+    } catch {
+      setInvites([]);
+    } finally {
+      setLoadingInvites(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadActive();
     loadSchedule();
-  }, [loadActive, loadSchedule]);
+    loadInvites();
+  }, [loadActive, loadSchedule, loadInvites]);
+
+  async function handleCreateInvite() {
+    setCreatingInvite(true);
+    try {
+      const invite = await api.invites.create(inviteLabel.trim() || undefined);
+      setInviteLabel('');
+      await loadInvites();
+      Alert.alert(
+        'Invite created',
+        `Code: ${invite.code}\n\nShare this with ${invite.label ?? 'your guest'}. It expires in 30 days.`,
+        [
+          { text: 'Copy code', onPress: () => Clipboard.setString(invite.code) },
+          { text: 'OK' },
+        ],
+      );
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Failed to create invite');
+    } finally {
+      setCreatingInvite(false);
+    }
+  }
 
   async function handleFire() {
     if (!prompt.trim()) {
@@ -291,6 +340,62 @@ export default function AdminScreen() {
             </TouchableOpacity>
           </View>
         )}
+        {/* Invites */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>INVITES</Text>
+
+          <View style={styles.inviteCreateRow}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Label (e.g. Heather)"
+              placeholderTextColor="#444"
+              value={inviteLabel}
+              onChangeText={setInviteLabel}
+              autoCapitalize="words"
+              maxLength={50}
+            />
+            <TouchableOpacity
+              style={[styles.createInviteBtn, creatingInvite && styles.btnDisabled]}
+              onPress={handleCreateInvite}
+              disabled={creatingInvite}
+            >
+              {creatingInvite ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <Text style={styles.createInviteBtnText}>Generate</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {loadingInvites ? (
+            <ActivityIndicator color="#555" />
+          ) : invites.length === 0 ? (
+            <Text style={styles.emptyText}>No invite codes yet.</Text>
+          ) : (
+            invites.map(inv => (
+              <TouchableOpacity
+                key={inv.id}
+                style={styles.inviteRow}
+                onPress={() => Clipboard.setString(inv.code)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.inviteLeft}>
+                  <Text style={styles.inviteCode}>{inv.code}</Text>
+                  {inv.label && <Text style={styles.inviteLabel}>{inv.label}</Text>}
+                </View>
+                <Text style={[
+                  styles.inviteStatus,
+                  inv.used_at ? styles.inviteUsed : styles.inviteAvailable,
+                ]}>
+                  {inv.used_at
+                    ? `Used · @${inv.used_by_username ?? '?'}`
+                    : 'Available'}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -392,4 +497,15 @@ const styles = StyleSheet.create({
   },
   fireBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
   btnDisabled: { opacity: 0.35 },
+
+  inviteCreateRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  createInviteBtn: { backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
+  createInviteBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
+  inviteRow: { backgroundColor: '#0f0f0f', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  inviteLeft: { gap: 3 },
+  inviteCode: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: 3 },
+  inviteLabel: { fontSize: 12, color: '#555' },
+  inviteStatus: { fontSize: 12, fontWeight: '600' },
+  inviteUsed: { color: '#444' },
+  inviteAvailable: { color: '#4caf50' },
 });
