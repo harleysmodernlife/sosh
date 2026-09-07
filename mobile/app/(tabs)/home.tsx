@@ -86,16 +86,14 @@ export default function HomeScreen() {
   }
 
   return (
-    <>
+    <View style={styles.container}>
       <FlatList
         data={feed}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <FeedCard entry={item} onPress={() => setSelected(item)} />
         )}
-        ListHeaderComponent={
-          <Header pulse={pulse} />
-        }
+        ListHeaderComponent={<Header pulse={pulse} />}
         ListEmptyComponent={
           <View style={styles.emptyFeed}>
             <Text style={styles.emptyIcon}>◉</Text>
@@ -121,12 +119,13 @@ export default function HomeScreen() {
         }
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        style={styles.flatList}
       />
 
       {selected && (
         <EntryModal entry={selected} onClose={() => setSelected(null)} />
       )}
-    </>
+    </View>
   );
 }
 
@@ -269,8 +268,10 @@ function formatTimeAgo(isoString: string): string {
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  flatList: { backgroundColor: '#000' },
   center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  list: { paddingBottom: 48 },
+  list: { paddingBottom: 48, backgroundColor: '#000' },
 
   // Header
   header: { paddingTop: 56, gap: 12, marginBottom: 8 },
