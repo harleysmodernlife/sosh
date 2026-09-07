@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import type { User, Pulse, Trophy, ResolvedPulse, MosaicEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
@@ -65,11 +64,6 @@ export default function HomeScreen() {
 
   const onRefresh = () => { setRefreshing(true); load(); };
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
-  }
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -87,27 +81,23 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.wordmark}>SÖSH</Text>
-        <TouchableOpacity onPress={signOut}>
-          <Text style={styles.signOut}>sign out</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Score card */}
       {user && (
         <View style={styles.scoreCard}>
-          {user.username ? (
-            <Text style={styles.username}>@{user.username}</Text>
-          ) : (
-            <TouchableOpacity onPress={() => router.replace('/onboarding')}>
-              <Text style={[styles.username, { color: '#ff4444' }]}>Set up your username →</Text>
-            </TouchableOpacity>
-          )}
-          {user.city && <Text style={styles.city}>{user.city}</Text>}
+          <View style={styles.scoreCardTop}>
+            <View>
+              <Text style={styles.username}>@{user.username}</Text>
+              {user.city && <Text style={styles.city}>{user.city}</Text>}
+            </View>
+            <View style={styles.trophyBadge}>
+              <Text style={styles.trophyBadgeIcon}>🏆</Text>
+              <Text style={styles.trophyBadgeCount}>{user.trophy_count}</Text>
+            </View>
+          </View>
           <Text style={styles.scoreLabel}>SÖSH SCORE</Text>
           <Text style={styles.scoreValue}>{user.sosh_score}</Text>
-          <Text style={styles.trophyCount}>
-            {user.trophy_count} {user.trophy_count === 1 ? 'trophy' : 'trophies'}
-          </Text>
         </View>
       )}
 
@@ -115,12 +105,12 @@ export default function HomeScreen() {
       {pulse && (pulse.status === 'active' || pulse.status === 'voting') ? (
         <PulseBanner pulse={pulse} />
       ) : (
-        <View style={styles.quietCard}>
-          <Text style={styles.quietLabel}>BETWEEN PULSES</Text>
+        <TouchableOpacity style={styles.quietCard} onPress={() => router.push('/(tabs)/pulse')} activeOpacity={0.7}>
+          <Text style={styles.quietLabel}>◉  SIGNAL QUIET</Text>
           <Text style={styles.quietText}>
-            The next Pulse can fire at any moment. Stay ready.
+            The next Pulse fires without warning.{'\n'}Check back — or just stay on the Pulse tab.
           </Text>
-        </View>
+        </TouchableOpacity>
       )}
 
       {/* Recent trophies */}
@@ -246,20 +236,23 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   wordmark: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 6 },
-  signOut: { color: '#555', fontSize: 13 },
 
   scoreCard: {
-    backgroundColor: '#111',
+    backgroundColor: '#0f0f0f',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#222',
+    borderColor: '#1f1f1f',
+    gap: 4,
   },
-  username: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 2 },
-  city: { fontSize: 13, color: '#666', marginBottom: 16 },
-  scoreLabel: { fontSize: 10, fontWeight: '700', color: '#555', letterSpacing: 3, marginBottom: 4 },
-  scoreValue: { fontSize: 52, fontWeight: '900', color: '#fff', lineHeight: 56 },
-  trophyCount: { fontSize: 13, color: '#555', marginTop: 4 },
+  scoreCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  username: { fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 3 },
+  city: { fontSize: 13, color: '#555' },
+  trophyBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#1a1a0a', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#2a2a10' },
+  trophyBadgeIcon: { fontSize: 14 },
+  trophyBadgeCount: { fontSize: 14, fontWeight: '800', color: '#cc0' },
+  scoreLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3, marginBottom: 2 },
+  scoreValue: { fontSize: 64, fontWeight: '900', color: '#fff', lineHeight: 68 },
 
   pulseBanner: { borderRadius: 16, padding: 20, gap: 8 },
   pulseLiveLabel: { fontSize: 12, fontWeight: '800', color: '#fff', letterSpacing: 2 },
@@ -273,10 +266,10 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     borderColor: '#1a1a1a',
-    gap: 8,
+    gap: 10,
   },
   quietLabel: { fontSize: 10, fontWeight: '700', color: '#333', letterSpacing: 3 },
-  quietText: { fontSize: 15, color: '#444', lineHeight: 22 },
+  quietText: { fontSize: 15, color: '#3a3a3a', lineHeight: 23 },
 
   section: { gap: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

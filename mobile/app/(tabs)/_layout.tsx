@@ -14,17 +14,18 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#000',
-          borderTopColor: '#111',
+          borderTopColor: '#1a1a1a',
           borderTopWidth: 1,
-          paddingBottom: 4,
-          height: 60,
+          paddingBottom: 8,
+          height: 64,
         },
         tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#555',
+        tabBarInactiveTintColor: '#444',
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
-          marginTop: -4,
+          fontWeight: '700',
+          letterSpacing: 0.5,
+          marginTop: -2,
         },
       }}
     >
@@ -45,7 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="leaderboard"
         options={{
-          title: 'Board',
+          title: 'Votes',
           tabBarIcon: ({ focused }) => <Icon label="▲" focused={focused} />,
         }}
       />

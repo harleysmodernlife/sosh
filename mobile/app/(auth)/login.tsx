@@ -56,7 +56,7 @@ export default function LoginScreen() {
     >
       <View style={styles.inner}>
         <Text style={styles.wordmark}>SÖSH</Text>
-        <Text style={styles.tagline}>The world is doing something right now.</Text>
+        <Text style={styles.tagline}>Something is happening right now.</Text>
 
         <View style={styles.modeToggle}>
           <TouchableOpacity
@@ -127,35 +127,36 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   wordmark: {
-    fontSize: 52,
+    fontSize: 56,
     fontWeight: '900',
     color: '#fff',
-    letterSpacing: 8,
-    marginBottom: 4,
+    letterSpacing: 10,
+    marginBottom: 8,
   },
   tagline: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 24,
+    fontSize: 15,
+    color: '#555',
+    marginBottom: 32,
+    letterSpacing: 0.3,
   },
   modeToggle: {
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: '#222',
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
   },
   modeBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 13,
     alignItems: 'center',
   },
   modeBtnActive: {
     backgroundColor: '#fff',
   },
   modeBtnText: {
-    color: '#555',
+    color: '#444',
     fontWeight: '600',
     fontSize: 14,
   },
@@ -163,28 +164,29 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   input: {
-    backgroundColor: '#111',
+    backgroundColor: '#0d0d0d',
     borderWidth: 1,
     borderColor: '#222',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 15,
     color: '#fff',
     fontSize: 16,
   },
   submitBtn: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 17,
     alignItems: 'center',
     marginTop: 8,
   },
   submitBtnDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   submitBtnText: {
     color: '#000',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

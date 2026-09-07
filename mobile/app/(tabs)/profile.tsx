@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import type { User, Trophy } from '@/lib/types';
 
@@ -20,6 +21,11 @@ export default function ProfileScreen() {
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.replace('/(auth)/login');
+  }
 
   async function load() {
     try {
@@ -80,6 +86,11 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>TROPHIES</Text>
           </View>
         </View>
+
+        {/* Sign out */}
+        <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
 
         {/* Trophy Case */}
         <View style={styles.section}>
@@ -269,6 +280,9 @@ const styles = StyleSheet.create({
   trophyEntry: { backgroundColor: '#111', borderRadius: 8, padding: 12 },
   trophyEntryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   trophyEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
+
+  signOutBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a' },
+  signOutText: { color: '#444', fontSize: 14, fontWeight: '600' },
 
   modalContainer: { flex: 1, backgroundColor: '#000' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },

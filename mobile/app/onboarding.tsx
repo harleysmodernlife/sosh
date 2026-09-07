@@ -55,7 +55,7 @@ export default function OnboardingScreen() {
         <Text style={styles.wordmark}>SÖSH</Text>
         <Text style={styles.heading}>Set up your profile</Text>
         <Text style={styles.subheading}>
-          Your username and city place you on the leaderboard. You can't change these later without contacting support.
+          Your username and city are your leaderboard identity. Choose them well — they're permanent.
         </Text>
 
         <View style={styles.field}>
@@ -110,19 +110,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60, gap: 20 },
 
-  wordmark: { fontSize: 36, fontWeight: '900', color: '#fff', letterSpacing: 6, marginBottom: 4 },
-  heading: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  subheading: { fontSize: 14, color: '#555', lineHeight: 20, marginBottom: 8 },
+  wordmark: { fontSize: 40, fontWeight: '900', color: '#fff', letterSpacing: 8, marginBottom: 4 },
+  heading: { fontSize: 26, fontWeight: '800', color: '#fff' },
+  subheading: { fontSize: 14, color: '#555', lineHeight: 21, marginBottom: 8 },
 
-  field: { gap: 6 },
+  field: { gap: 7 },
   label: { fontSize: 10, fontWeight: '700', color: '#555', letterSpacing: 3 },
   input: {
-    backgroundColor: '#111',
+    backgroundColor: '#0d0d0d',
     borderWidth: 1,
     borderColor: '#222',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 15,
     color: '#fff',
     fontSize: 16,
   },
@@ -131,11 +131,11 @@ const styles = StyleSheet.create({
 
   btn: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 17,
     alignItems: 'center',
     marginTop: 8,
   },
   btnDisabled: { opacity: 0.35 },
-  btnText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  btnText: { color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
 });

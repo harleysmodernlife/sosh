@@ -10,7 +10,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '@/lib/api';
@@ -98,8 +98,8 @@ export default function PulseScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.noPulseIcon}>◉</Text>
-        <Text style={styles.noPulseTitle}>No active Pulse</Text>
-        <Text style={styles.noPulseText}>Stay ready. It can fire at any moment.</Text>
+        <Text style={styles.noPulseTitle}>Signal quiet.</Text>
+        <Text style={styles.noPulseText}>The Pulse fires without warning.{'\n'}This is the tab to be on when it does.</Text>
       </View>
     );
   }
@@ -113,8 +113,11 @@ export default function PulseScreen() {
       <View style={styles.center}>
         <Text style={styles.votingIcon}>🗳</Text>
         <Text style={styles.votingTitle}>Voting is open</Text>
-        <Text style={styles.votingText}>Submission window is closed. Go vote!</Text>
+        <Text style={styles.votingText}>Submissions are closed.{'\n'}Now go pick a winner.</Text>
         {countdown && <Text style={styles.votingCountdown}>{countdown} left</Text>}
+        <TouchableOpacity style={styles.votingBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
+          <Text style={styles.votingBtnText}>See the entries →</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -207,7 +210,7 @@ export default function PulseScreen() {
         {submitState === 'submitting' ? (
           <ActivityIndicator color="#000" />
         ) : (
-          <Text style={styles.submitBtnText}>Submit to the Pulse</Text>
+          <Text style={styles.submitBtnText}>Submit</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -218,7 +221,9 @@ function SubmittedView({ entry, pulse, countdown }: { entry: Entry; pulse: Pulse
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.submittedContent}>
       <Text style={styles.submittedTitle}>You're in.</Text>
-      <Text style={styles.submittedSub}>Voting opens when the submission window closes.</Text>
+      <Text style={styles.submittedSub}>
+        Voting opens when the submission window closes.
+      </Text>
       {countdown && (
         <Text style={styles.submittedCountdown}>{countdown} remaining</Text>
       )}
@@ -230,6 +235,9 @@ function SubmittedView({ entry, pulse, countdown }: { entry: Entry; pulse: Pulse
           <Image source={{ uri: entry.media_url }} style={styles.myEntryImage} />
         ) : null}
       </View>
+      <TouchableOpacity style={styles.watchBoardBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
+        <Text style={styles.watchBoardBtnText}>Watch the rankings →</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -276,20 +284,24 @@ const styles = StyleSheet.create({
   submitBtnText: { color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
 
   submittedContent: { padding: 32, paddingTop: 80, gap: 16 },
-  submittedTitle: { fontSize: 36, fontWeight: '900', color: '#fff' },
-  submittedSub: { fontSize: 15, color: '#666', lineHeight: 22 },
+  submittedTitle: { fontSize: 40, fontWeight: '900', color: '#fff' },
+  submittedSub: { fontSize: 15, color: '#555', lineHeight: 23 },
   submittedCountdown: { fontSize: 13, color: '#ff4444', fontVariant: ['tabular-nums'] },
-  myEntryCard: { backgroundColor: '#111', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#222', gap: 10, marginTop: 16 },
-  myEntryLabel: { fontSize: 10, fontWeight: '700', color: '#555', letterSpacing: 3 },
-  myEntryText: { fontSize: 18, color: '#fff', lineHeight: 26 },
-  myEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
+  myEntryCard: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#1f1f1f', gap: 10, marginTop: 8 },
+  myEntryLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
+  myEntryText: { fontSize: 18, color: '#fff', lineHeight: 27 },
+  myEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 10 },
+  watchBoardBtn: { paddingVertical: 16, borderRadius: 10, borderWidth: 1, borderColor: '#222', alignItems: 'center', marginTop: 4 },
+  watchBoardBtnText: { color: '#888', fontSize: 14, fontWeight: '600' },
 
-  noPulseIcon: { fontSize: 48, color: '#222' },
-  noPulseTitle: { fontSize: 22, fontWeight: '700', color: '#444' },
-  noPulseText: { fontSize: 15, color: '#333', textAlign: 'center' },
+  noPulseIcon: { fontSize: 52, color: '#1a1a1a', marginBottom: 4 },
+  noPulseTitle: { fontSize: 24, fontWeight: '800', color: '#333' },
+  noPulseText: { fontSize: 15, color: '#2a2a2a', textAlign: 'center', lineHeight: 23 },
 
-  votingIcon: { fontSize: 48 },
-  votingTitle: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  votingText: { fontSize: 15, color: '#666', textAlign: 'center' },
-  votingCountdown: { fontSize: 13, color: '#ff8800', fontVariant: ['tabular-nums'], marginTop: 8 },
+  votingIcon: { fontSize: 48, marginBottom: 4 },
+  votingTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  votingText: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 23 },
+  votingCountdown: { fontSize: 14, color: '#ff8800', fontVariant: ['tabular-nums'], marginTop: 4 },
+  votingBtn: { marginTop: 8, backgroundColor: '#fff', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 10 },
+  votingBtnText: { color: '#000', fontWeight: '800', fontSize: 15 },
 });
