@@ -10,16 +10,44 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { api } from '@/lib/api';
 
+const { width: W } = Dimensions.get('window');
+
+const INTRO_SLIDES = [
+  {
+    icon: '⚡',
+    title: 'The Pulse',
+    body: 'Without warning, a prompt fires globally. You have minutes to respond — text, photo, or video. One winner per city gets City Rep.',
+  },
+  {
+    icon: '▲',
+    title: 'Vote',
+    body: 'When submission closes, voting opens. Back the best responses. The community decides who wins.',
+  },
+  {
+    icon: '◉',
+    title: 'The Feed',
+    body: 'Browse posts from the community anytime. Like, comment, follow people whose vibe matches yours.',
+  },
+  {
+    icon: '🏆',
+    title: 'Sösh Score',
+    body: 'Every trophy, entry, vote received, and vote cast builds your score. Win pulses. Rise on the board.',
+  },
+];
+
 export default function OnboardingScreen() {
+  const [slide, setSlide] = useState(0);
   const [username, setUsername] = useState('');
   const [city, setCity] = useState('');
   const [loading, setLoading] = useState(false);
 
   const usernameValid = /^[a-zA-Z0-9_]{3,30}$/.test(username);
+  const onForm = slide >= INTRO_SLIDES.length;
 
   async function handleFinish() {
     if (!usernameValid) {
@@ -46,6 +74,32 @@ export default function OnboardingScreen() {
     }
   }
 
+  if (!onForm) {
+    const s = INTRO_SLIDES[slide];
+    return (
+      <View style={styles.container}>
+        <View style={styles.slideWrap}>
+          <Text style={styles.wordmark}>SÖSH</Text>
+          <Text style={styles.slideIcon}>{s.icon}</Text>
+          <Text style={styles.slideTitle}>{s.title}</Text>
+          <Text style={styles.slideBody}>{s.body}</Text>
+        </View>
+        <View style={styles.slideNav}>
+          <View style={styles.dots}>
+            {INTRO_SLIDES.map((_, i) => (
+              <View key={i} style={[styles.dot, i === slide && styles.dotActive]} />
+            ))}
+          </View>
+          <TouchableOpacity style={styles.nextBtn} onPress={() => setSlide(s => s + 1)}>
+            <Text style={styles.nextBtnText}>
+              {slide === INTRO_SLIDES.length - 1 ? 'Set up profile →' : 'Next →'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -55,7 +109,7 @@ export default function OnboardingScreen() {
         <Text style={styles.wordmark}>SÖSH</Text>
         <Text style={styles.heading}>Set up your profile</Text>
         <Text style={styles.subheading}>
-          Your username and city are your leaderboard identity. Choose them well — they're permanent.
+          Your username and city are your leaderboard identity.
         </Text>
 
         <View style={styles.field}>
@@ -65,7 +119,7 @@ export default function OnboardingScreen() {
             placeholder="e.g. captain_sosh"
             placeholderTextColor="#555"
             value={username}
-            onChangeText={t => setUsername(t.replace(/\s/g, ''))}
+            onChangeText={t => setUsername(t.replace(/\s/g, '').slice(0, 30))}
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={30}
@@ -87,7 +141,7 @@ export default function OnboardingScreen() {
             autoCorrect={false}
             maxLength={100}
           />
-          <Text style={styles.hint}>Enter the city you're competing in</Text>
+          <Text style={styles.hint}>Your city leaderboard — this determines your Pulse competition</Text>
         </View>
 
         <TouchableOpacity
@@ -108,9 +162,22 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60, gap: 20 },
 
-  wordmark: { fontSize: 40, fontWeight: '900', color: '#fff', letterSpacing: 8, marginBottom: 4 },
+  // Intro slides
+  slideWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, gap: 20 },
+  wordmark: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: 8 },
+  slideIcon: { fontSize: 64, marginTop: 8 },
+  slideTitle: { fontSize: 28, fontWeight: '900', color: '#fff', textAlign: 'center' },
+  slideBody: { fontSize: 16, color: '#666', lineHeight: 24, textAlign: 'center' },
+  slideNav: { paddingHorizontal: 32, paddingBottom: 56, gap: 20, alignItems: 'center' },
+  dots: { flexDirection: 'row', gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#222' },
+  dotActive: { backgroundColor: '#fff', width: 18 },
+  nextBtn: { backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 36, paddingVertical: 16, alignSelf: 'stretch', alignItems: 'center' },
+  nextBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
+
+  // Profile form
+  inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 60, gap: 20 },
   heading: { fontSize: 26, fontWeight: '800', color: '#fff' },
   subheading: { fontSize: 14, color: '#555', lineHeight: 21, marginBottom: 8 },
 

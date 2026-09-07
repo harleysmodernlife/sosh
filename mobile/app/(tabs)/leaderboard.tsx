@@ -335,7 +335,7 @@ function EntryModal({
   async function handleReport() {
     if (reported || !entry) return;
     try {
-      await api.reports.flag(entry.id);
+      await api.reports.flagEntry(entry.id);
       setReported(true);
     } catch {}
   }
