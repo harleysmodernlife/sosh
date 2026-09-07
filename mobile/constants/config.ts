@@ -1,8 +1,7 @@
-// API base URL — update to your local machine's IP when testing on a physical device
-// e.g. "http://192.168.1.42:8000"
-export const API_BASE_URL = __DEV__
-  ? 'http://100.82.174.33:8000'
-  : 'https://sosh-production.up.railway.app';
+// API base URL — always production for Expo Go (__DEV__ is always true in Expo Go,
+// so a DEV branch would break devices on other networks).
+// To test against a local server, temporarily swap this URL.
+export const API_BASE_URL = 'https://sosh-production.up.railway.app';
 
 export const SUPABASE_URL = 'https://gxtbcxkdodmfikkhncmw.supabase.co';
 export const SUPABASE_ANON_KEY =
