@@ -101,25 +101,27 @@ def resolve_pulse(pulse_id: str) -> None:
                 row = cur.fetchone()
                 winner_push_token = row[0] if row else None
 
-            # 8. Generate Mosaic (top 20 entries by vote count)
+            # 8. Generate Mosaic (top 20 entries by vote count) — skip if no entries
             cur.execute(
                 """
-                INSERT INTO mosaics (id, pulse_id, entry_ids, generated_at)
-                VALUES (
-                    %s, %s,
-                    (
-                        SELECT array_agg(id ORDER BY vote_count DESC)
-                        FROM (
-                            SELECT id, vote_count FROM pulse_entries
-                            WHERE pulse_id = %s AND moderation_status = 'approved'
-                            ORDER BY vote_count DESC LIMIT 20
-                        ) top
-                    ),
-                    now()
-                )
+                SELECT array_agg(id ORDER BY vote_count DESC)
+                FROM (
+                    SELECT id, vote_count FROM pulse_entries
+                    WHERE pulse_id = %s AND moderation_status = 'approved'
+                    ORDER BY vote_count DESC LIMIT 20
+                ) top
                 """,
-                (str(uuidlib.uuid4()), pulse_id, pulse_id),
+                (pulse_id,),
             )
+            mosaic_entry_ids = cur.fetchone()[0]
+            if mosaic_entry_ids:
+                cur.execute(
+                    """
+                    INSERT INTO mosaics (id, pulse_id, entry_ids, generated_at)
+                    VALUES (%s, %s, %s, now())
+                    """,
+                    (str(uuidlib.uuid4()), pulse_id, mosaic_entry_ids),
+                )
 
             # 9. Mark pulse resolved
             cur.execute(

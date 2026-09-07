@@ -48,6 +48,9 @@ export const api = {
 
     update: (data: { display_name?: string; city?: string; country_code?: string }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    registerPushToken: (token: string): Promise<void> =>
+      apiFetch('/users/me/push-token', { method: 'PUT', body: JSON.stringify({ token }) }),
   },
 
   // ─── Pulses ────────────────────────────────────────────────────────────────

@@ -27,6 +27,10 @@ class UpdateProfileRequest(BaseModel):
     country_code: str | None = Field(None, min_length=2, max_length=2)
 
 
+class PushTokenRequest(BaseModel):
+    token: str = Field(..., max_length=200)
+
+
 @router.get("/me", response_model=UserProfile)
 async def get_my_profile(
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -91,3 +95,16 @@ async def update_my_profile(
     await db.commit()
 
     return await get_my_profile(current_user, db)
+
+
+@router.put("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)
+async def register_push_token(
+    body: PushTokenRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        text("UPDATE users SET push_token = :token, updated_at = now() WHERE id = :user_id"),
+        {"token": body.token, "user_id": current_user.user_id},
+    )
+    await db.commit()

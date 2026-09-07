@@ -30,7 +30,11 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
@@ -52,6 +56,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ebb79de8-19a2-4e81-aacb-06e4be9b28fb"
+      }
+    },
+    "owner": "harleysmodernlifes-team"
   }
 }
