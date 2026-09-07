@@ -18,6 +18,9 @@ import type { Pulse } from '@/lib/types';
 export default function AdminScreen() {
   const [activePulse, setActivePulse] = useState<Pulse | null>(null);
   const [loadingPulse, setLoadingPulse] = useState(true);
+  const [schedule, setSchedule] = useState<{ enabled: boolean; cron: string | null; next_run: string | null } | null>(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [togglingSchedule, setTogglingSchedule] = useState(false);
 
   const [prompt, setPrompt] = useState('');
   const [city, setCity] = useState('');
@@ -38,7 +41,22 @@ export default function AdminScreen() {
     }
   }, []);
 
-  useEffect(() => { loadActive(); }, [loadActive]);
+  const loadSchedule = useCallback(async () => {
+    setLoadingSchedule(true);
+    try {
+      const s = await api.admin.getSchedule();
+      setSchedule(s);
+    } catch {
+      setSchedule(null);
+    } finally {
+      setLoadingSchedule(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadActive();
+    loadSchedule();
+  }, [loadActive, loadSchedule]);
 
   async function handleFire() {
     if (!prompt.trim()) {
@@ -71,6 +89,24 @@ export default function AdminScreen() {
       Alert.alert('Error', err.message ?? 'Failed to fire Pulse');
     } finally {
       setFiring(false);
+    }
+  }
+
+  async function handleToggleSchedule() {
+    setTogglingSchedule(true);
+    try {
+      if (schedule?.enabled) {
+        await api.admin.deleteSchedule();
+        setSchedule({ enabled: false, cron: null, next_run: null });
+      } else {
+        // Default: 18:00 UTC daily = 1pm CDT
+        const updated = await api.admin.setSchedule('0 18 * * *');
+        setSchedule(updated);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Failed to update schedule');
+    } finally {
+      setTogglingSchedule(false);
     }
   }
 
@@ -141,6 +177,48 @@ export default function AdminScreen() {
           ) : (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyText}>No active Pulse</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Daily Schedule */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DAILY SCHEDULE</Text>
+          {loadingSchedule ? (
+            <ActivityIndicator color="#fff" style={{ marginTop: 12 }} />
+          ) : (
+            <View style={styles.scheduleCard}>
+              <View style={styles.scheduleRow}>
+                <View>
+                  <Text style={[styles.scheduleStatus, schedule?.enabled ? styles.scheduleOn : styles.scheduleOff]}>
+                    {schedule?.enabled ? 'ENABLED' : 'DISABLED'}
+                  </Text>
+                  {schedule?.enabled && schedule.next_run && (
+                    <Text style={styles.scheduleNext}>
+                      Next: {new Date(schedule.next_run).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}
+                    </Text>
+                  )}
+                  {schedule?.enabled && (
+                    <Text style={styles.scheduleCron}>
+                      {schedule.cron ?? '0 18 * * *'}  ·  18:00 UTC daily (1pm CDT)
+                    </Text>
+                  )}
+                  {!schedule?.enabled && (
+                    <Text style={styles.scheduleCron}>Fires at 18:00 UTC daily when enabled</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[styles.scheduleToggleBtn, schedule?.enabled ? styles.scheduleToggleOff : styles.scheduleToggleOn, togglingSchedule && styles.btnDisabled]}
+                  onPress={handleToggleSchedule}
+                  disabled={togglingSchedule}
+                >
+                  {togglingSchedule ? (
+                    <ActivityIndicator color="#000" size="small" />
+                  ) : (
+                    <Text style={styles.scheduleToggleText}>{schedule?.enabled ? 'Disable' : 'Enable'}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -286,6 +364,24 @@ const styles = StyleSheet.create({
   charCount: { fontSize: 11, color: '#333', textAlign: 'right' },
 
   row: { flexDirection: 'row', gap: 12 },
+
+  scheduleCard: {
+    backgroundColor: '#0f0f0f',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#222',
+    padding: 16,
+  },
+  scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  scheduleStatus: { fontSize: 12, fontWeight: '800', letterSpacing: 2, marginBottom: 4 },
+  scheduleOn: { color: '#4caf50' },
+  scheduleOff: { color: '#555' },
+  scheduleNext: { fontSize: 13, color: '#aaa', marginBottom: 2 },
+  scheduleCron: { fontSize: 11, color: '#444' },
+  scheduleToggleBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, minWidth: 80, alignItems: 'center' },
+  scheduleToggleOn: { backgroundColor: '#4caf50' },
+  scheduleToggleOff: { backgroundColor: '#333' },
+  scheduleToggleText: { color: '#000', fontWeight: '700', fontSize: 13 },
 
   fireBtn: {
     backgroundColor: '#fff',

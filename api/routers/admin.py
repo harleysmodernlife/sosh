@@ -13,9 +13,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rq_scheduler import Scheduler
+
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
+from redis_client import redis_sync
 from workers.jobs import enqueue_leaderboard_resolve, enqueue_push_pulse_notification
+
+DAILY_CRON_ID = "sosh:daily-pulse"
 
 router = APIRouter()
 
@@ -128,3 +133,88 @@ async def manually_resolve_pulse(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Pulse already resolved")
 
     enqueue_leaderboard_resolve(str(pulse_id), delay_seconds=0)
+
+
+# ─── Schedule management ──────────────────────────────────────────────────────
+
+class ScheduleRequest(BaseModel):
+    cron: str = Field("0 18 * * *", description="Cron expression in UTC (default: 18:00 UTC / 1pm CDT)")
+
+
+class ScheduleStatus(BaseModel):
+    enabled: bool
+    cron: str | None
+    next_run: str | None
+
+
+def _get_scheduler() -> Scheduler:
+    return Scheduler(queue_name="sosh", connection=redis_sync)
+
+
+def _find_cron_job(scheduler: Scheduler):
+    for dt, job in scheduler.get_jobs(with_times=True):
+        if job.id == DAILY_CRON_ID:
+            return dt, job
+    return None, None
+
+
+@router.get("/schedule", response_model=ScheduleStatus)
+async def get_schedule(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_admin(current_user, db)
+    scheduler = _get_scheduler()
+    dt, job = _find_cron_job(scheduler)
+    if job is None:
+        return ScheduleStatus(enabled=False, cron=None, next_run=None)
+    cron_str = job.meta.get("cron_string") if job.meta else None
+    return ScheduleStatus(
+        enabled=True,
+        cron=cron_str,
+        next_run=dt.isoformat() if dt else None,
+    )
+
+
+@router.post("/schedule", response_model=ScheduleStatus)
+async def set_schedule(
+    body: ScheduleRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_admin(current_user, db)
+    scheduler = _get_scheduler()
+
+    # Cancel any existing cron for this ID
+    try:
+        scheduler.cancel(DAILY_CRON_ID)
+    except Exception:
+        pass
+
+    scheduler.cron(
+        body.cron,
+        func="workers.worker_fire_pulse.fire_daily_pulse",
+        id=DAILY_CRON_ID,
+        use_local_timezone=False,
+        repeat=None,  # run forever
+    )
+
+    dt, job = _find_cron_job(scheduler)
+    return ScheduleStatus(
+        enabled=True,
+        cron=body.cron,
+        next_run=dt.isoformat() if dt else None,
+    )
+
+
+@router.delete("/schedule", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_schedule(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_admin(current_user, db)
+    scheduler = _get_scheduler()
+    try:
+        scheduler.cancel(DAILY_CRON_ID)
+    except Exception:
+        pass

@@ -118,6 +118,15 @@ export const api = {
 
     resolvePulse: (pulseId: string): Promise<void> =>
       apiFetch(`/admin/pulses/${pulseId}/resolve`, { method: 'POST' }),
+
+    getSchedule: (): Promise<{ enabled: boolean; cron: string | null; next_run: string | null }> =>
+      apiFetch('/admin/schedule'),
+
+    setSchedule: (cron: string): Promise<{ enabled: boolean; cron: string | null; next_run: string | null }> =>
+      apiFetch('/admin/schedule', { method: 'POST', body: JSON.stringify({ cron }) }),
+
+    deleteSchedule: (): Promise<void> =>
+      apiFetch('/admin/schedule', { method: 'DELETE' }),
   },
 
   // ─── Media ────────────────────────────────────────────────────────────────
