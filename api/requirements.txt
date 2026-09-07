@@ -32,6 +32,9 @@ pydantic-settings==2.5.2
 # Content moderation (basic profanity/keyword filter for MVP)
 better-profanity==0.7.0
 
+# Sync DB driver (used by RQ workers — can't use asyncpg in sync context)
+psycopg2-binary==2.9.9
+
 # Utilities
 python-dateutil==2.9.0
 

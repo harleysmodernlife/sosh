@@ -5,6 +5,7 @@ v0.1 scope: manually fire a Pulse.
 POST /admin/pulses     — create and activate a new Pulse
 POST /admin/pulses/{id}/resolve — manually trigger leaderboard resolution
 """
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -64,6 +65,10 @@ async def fire_pulse(
         )
 
     pulse_id = uuid4()
+    now = datetime.now(timezone.utc)
+    submission_ends_at = now + timedelta(minutes=body.submission_window_minutes)
+    voting_ends_at = submission_ends_at + timedelta(hours=body.voting_window_hours)
+
     await db.execute(
         text("""
             INSERT INTO pulses
@@ -71,8 +76,7 @@ async def fire_pulse(
                  submission_ends_at, voting_ends_at, created_at, updated_at)
             VALUES
                 (:id, :prompt, 'active', :city, :country_code,
-                 now() + :submission_interval::interval,
-                 now() + :submission_interval::interval + :voting_interval::interval,
+                 :submission_ends_at, :voting_ends_at,
                  now(), now())
         """),
         {
@@ -80,8 +84,8 @@ async def fire_pulse(
             "prompt": body.prompt,
             "city": body.city,
             "country_code": body.country_code,
-            "submission_interval": f"{body.submission_window_minutes} minutes",
-            "voting_interval": f"{body.voting_window_hours} hours",
+            "submission_ends_at": submission_ends_at,
+            "voting_ends_at": voting_ends_at,
         },
     )
     await db.commit()
