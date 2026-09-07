@@ -14,11 +14,9 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
 
-type Mode = 'text' | 'camera' | 'library';
 type MediaType = 'photo' | 'video';
 
 export default function ComposeScreen() {
@@ -27,13 +25,9 @@ export default function ComposeScreen() {
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>('photo');
   const [showCamera, setShowCamera] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [cameraMode, setCameraMode] = useState<MediaType>('photo');
   const [submitting, setSubmitting] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const hasContent = text.trim().length > 0 || mediaUri !== null;
 
@@ -55,59 +49,44 @@ export default function ComposeScreen() {
     setText('');
   }
 
+  async function openPhotoCamera() {
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert('Permission needed', 'Allow camera access to take photos.');
+        return;
+      }
+    }
+    setShowCamera(true);
+  }
+
+  async function recordVideoNative() {
+    // Use native camera app for video — expo-camera recordAsync is unreliable in Expo Go on Android
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow camera access to record video.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      videoMaxDuration: 30,
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setMediaUri(result.assets[0].uri);
+    setMediaType('video');
+    setText('');
+  }
+
   async function takePhoto() {
     if (!cameraRef.current) return;
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-    if (photo) {
+    if (photo?.uri) {
       setMediaUri(photo.uri);
       setMediaType('photo');
       setShowCamera(false);
+      setText('');
     }
-  }
-
-  async function startRecording() {
-    if (!cameraRef.current || isRecording) return;
-
-    const { status: micStatus } = await Audio.requestPermissionsAsync();
-    if (micStatus !== 'granted') {
-      Alert.alert('Microphone needed', 'Allow microphone access to record video.');
-      return;
-    }
-
-    setIsRecording(true);
-    setRecordingSeconds(0);
-    recordingTimer.current = setInterval(() => {
-      setRecordingSeconds(s => {
-        if (s + 1 >= 30) cameraRef.current?.stopRecording();
-        return s + 1;
-      });
-    }, 1000);
-
-    try {
-      const video = await cameraRef.current.recordAsync({ maxDuration: 30 });
-      if (video?.uri) {
-        setMediaUri(video.uri);
-        setMediaType('video');
-        setShowCamera(false);
-      }
-    } catch {}
-    finally {
-      setIsRecording(false);
-      if (recordingTimer.current) {
-        clearInterval(recordingTimer.current);
-        recordingTimer.current = null;
-      }
-    }
-  }
-
-  function stopRecording() {
-    cameraRef.current?.stopRecording();
-  }
-
-  async function openCamera(type: MediaType) {
-    if (!cameraPermission?.granted) await requestCameraPermission();
-    setCameraMode(type);
-    setShowCamera(true);
   }
 
   async function submit() {
@@ -145,37 +124,14 @@ export default function ComposeScreen() {
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
           facing="back"
-          mode={cameraMode === 'video' ? 'video' : 'picture'}
+          mode="picture"
         />
         <TouchableOpacity style={styles.cameraClose} onPress={() => setShowCamera(false)}>
           <Text style={styles.cameraCloseText}>✕</Text>
         </TouchableOpacity>
-        {isRecording && (
-          <View style={styles.recBadge}>
-            <View style={styles.recDot} />
-            <Text style={styles.recTimer}>
-              {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')}
-            </Text>
-          </View>
-        )}
-        <TouchableOpacity
-          style={[styles.shutterBtn, isRecording && styles.shutterBtnRec]}
-          onPress={cameraMode === 'photo' ? takePhoto : (isRecording ? stopRecording : startRecording)}
-        >
-          {cameraMode === 'video' && isRecording
-            ? <View style={styles.stopShape} />
-            : <View style={styles.shutterInner} />}
+        <TouchableOpacity style={styles.shutterBtn} onPress={takePhoto}>
+          <View style={styles.shutterInner} />
         </TouchableOpacity>
-        {cameraMode === 'photo' && (
-          <TouchableOpacity style={styles.switchToVideo} onPress={() => setCameraMode('video')}>
-            <Text style={styles.switchText}>Video</Text>
-          </TouchableOpacity>
-        )}
-        {cameraMode === 'video' && !isRecording && (
-          <TouchableOpacity style={styles.switchToVideo} onPress={() => setCameraMode('photo')}>
-            <Text style={styles.switchText}>Photo</Text>
-          </TouchableOpacity>
-        )}
       </View>
     );
   }
@@ -208,6 +164,11 @@ export default function ComposeScreen() {
             <TouchableOpacity style={styles.removeMedia} onPress={() => setMediaUri(null)}>
               <Text style={styles.removeMediaText}>✕</Text>
             </TouchableOpacity>
+            {mediaType === 'video' && (
+              <View style={styles.videoBadge}>
+                <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
+              </View>
+            )}
           </View>
         ) : (
           <TextInput
@@ -242,11 +203,11 @@ export default function ComposeScreen() {
 
       {!mediaUri && (
         <View style={styles.toolbar}>
-          <TouchableOpacity style={styles.toolBtn} onPress={() => openCamera('photo')}>
+          <TouchableOpacity style={styles.toolBtn} onPress={openPhotoCamera}>
             <Text style={styles.toolIcon}>📷</Text>
             <Text style={styles.toolLabel}>Camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolBtn} onPress={() => openCamera('video')}>
+          <TouchableOpacity style={styles.toolBtn} onPress={recordVideoNative}>
             <Text style={styles.toolIcon}>🎥</Text>
             <Text style={styles.toolLabel}>Video</Text>
           </TouchableOpacity>
@@ -301,6 +262,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   removeMediaText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  videoBadge: {
+    position: 'absolute', bottom: 12, left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+  },
+  videoBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
 
   captionInput: {
     color: '#fff',
@@ -320,7 +286,6 @@ const styles = StyleSheet.create({
   toolIcon: { fontSize: 22 },
   toolLabel: { color: '#555', fontSize: 11, fontWeight: '600' },
 
-  // Camera overlay
   cameraScreen: { flex: 1, backgroundColor: '#000' },
   cameraClose: {
     position: 'absolute', top: 56, left: 20, zIndex: 10,
@@ -329,13 +294,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   cameraCloseText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  recBadge: {
-    position: 'absolute', top: 60, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-  },
-  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4444' },
-  recTimer: { color: '#fff', fontSize: 13, fontWeight: '600' },
   shutterBtn: {
     position: 'absolute', bottom: 48, alignSelf: 'center',
     width: 72, height: 72, borderRadius: 36,
@@ -343,12 +301,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 3, borderColor: '#fff',
   },
-  shutterBtnRec: { borderColor: '#ff4444', backgroundColor: 'rgba(255,68,68,0.2)' },
   shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
-  stopShape: { width: 28, height: 28, borderRadius: 4, backgroundColor: '#ff4444' },
-  switchToVideo: {
-    position: 'absolute', bottom: 64, right: 32,
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-  },
-  switchText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 });
