@@ -4,6 +4,7 @@ export interface User {
   display_name: string | null;
   city: string | null;
   country_code: string | null;
+  avatar_url: string | null;
   sosh_score: number;
   trophy_count: number;
   is_admin: boolean;

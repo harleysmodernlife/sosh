@@ -17,6 +17,7 @@ class UserProfile(BaseModel):
     display_name: str | None
     city: str | None
     country_code: str | None
+    avatar_url: str | None = None
     sosh_score: int
     trophy_count: int
     is_admin: bool = False
@@ -27,6 +28,7 @@ class UpdateProfileRequest(BaseModel):
     display_name: str | None = Field(None, max_length=50)
     city: str | None = Field(None, max_length=100)
     country_code: str | None = Field(None, min_length=2, max_length=2)
+    avatar_url: str | None = Field(None, max_length=500)
 
 
 class PushTokenRequest(BaseModel):
@@ -40,7 +42,7 @@ async def get_my_profile(
 ):
     row = await db.execute(
         text("""
-            SELECT u.id, u.username, u.display_name, u.city, u.country_code,
+            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (EXISTS (SELECT 1 FROM user_roles WHERE user_id = u.id AND role = 'admin')) AS is_admin
@@ -63,7 +65,7 @@ async def get_user_profile(
 ):
     row = await db.execute(
         text("""
-            SELECT u.id, u.username, u.display_name, u.city, u.country_code,
+            SELECT u.id, u.username, u.display_name, u.city, u.country_code, u.avatar_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count
             FROM users u

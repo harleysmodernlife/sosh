@@ -62,9 +62,13 @@ export default function UserProfileScreen() {
 
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarLetter}>
-            {(user.username ?? user.display_name ?? '?')[0].toUpperCase()}
-          </Text>
+          {user.avatar_url ? (
+            <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarLetter}>
+              {(user.username ?? user.display_name ?? '?')[0].toUpperCase()}
+            </Text>
+          )}
         </View>
         <Text style={styles.username}>@{user.username ?? '—'}</Text>
         {user.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
@@ -135,7 +139,8 @@ const styles = StyleSheet.create({
   back: { fontSize: 24, color: '#555' },
 
   profileHeader: { alignItems: 'center', gap: 6, paddingVertical: 8 },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 4 },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', marginBottom: 4, overflow: 'hidden' },
+  avatarImage: { width: 72, height: 72, borderRadius: 36 },
   avatarLetter: { fontSize: 30, fontWeight: '800', color: '#fff' },
   username: { fontSize: 20, fontWeight: '800', color: '#fff' },
   displayName: { fontSize: 14, color: '#666' },

@@ -46,7 +46,7 @@ export const api = {
 
     get: (userId: string): Promise<User> => apiFetch(`/users/${userId}`, {}, false),
 
-    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string }): Promise<User> =>
+    update: (data: { username?: string; display_name?: string; city?: string; country_code?: string; avatar_url?: string }): Promise<User> =>
       apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
     myEntries: (): Promise<MyEntry[]> => apiFetch('/users/me/entries'),
@@ -152,6 +152,12 @@ export const api = {
       apiFetch<{ upload_url: string; media_key: string; expires_in: number }>(
         '/media/presign',
         { method: 'POST', body: JSON.stringify({ content_type: contentType, pulse_id: pulseId }) },
+      ),
+
+    presignAvatar: () =>
+      apiFetch<{ upload_url: string; media_key: string; expires_in: number }>(
+        '/media/presign-avatar',
+        { method: 'POST' },
       ),
 
     upload: async (uploadUrl: string, uri: string, contentType: string): Promise<void> => {

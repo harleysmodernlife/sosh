@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import type { User, Trophy, MyEntry } from '@/lib/types';
@@ -25,6 +26,36 @@ export default function ProfileScreen() {
   const [entries, setEntries] = useState<MyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  async function pickAndUploadAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setAvatarUploading(true);
+    try {
+      const { upload_url, media_key: publicUrl } = await api.media.presignAvatar();
+      await api.media.upload(upload_url, result.assets[0].uri, 'image/jpeg');
+      // Add cache-bust so React Native re-fetches the image
+      const bustUrl = `${publicUrl}?t=${Date.now()}`;
+      const updated = await api.users.update({ avatar_url: bustUrl });
+      setUser(updated);
+    } catch (err: any) {
+      Alert.alert('Upload failed', err.message);
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -56,11 +87,20 @@ export default function ProfileScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Profile header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarLetter}>
-              {(user?.username ?? user?.display_name ?? '?')[0].toUpperCase()}
-            </Text>
-          </View>
+          <TouchableOpacity style={styles.avatar} onPress={pickAndUploadAvatar} activeOpacity={0.8}>
+            {avatarUploading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarLetter}>
+                {(user?.username ?? user?.display_name ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+            <View style={styles.avatarEditBadge}>
+              <Text style={styles.avatarEditBadgeText}>+</Text>
+            </View>
+          </TouchableOpacity>
           <View style={styles.profileInfo}>
             {user?.display_name
               ? <Text style={styles.displayName}>{user.display_name}</Text>
@@ -290,8 +330,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
 
   profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden' },
+  avatarImage: { width: 64, height: 64, borderRadius: 32 },
   avatarLetter: { fontSize: 26, fontWeight: '800', color: '#fff' },
+  avatarEditBadge: { position: 'absolute', bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  avatarEditBadgeText: { fontSize: 14, fontWeight: '800', color: '#000', lineHeight: 18 },
   profileInfo: { flex: 1, gap: 2 },
   displayName: { fontSize: 18, fontWeight: '700', color: '#fff' },
   username: { fontSize: 13, color: '#555' },
