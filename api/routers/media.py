@@ -60,6 +60,12 @@ async def get_presigned_url(
     body: PresignRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
+    if not settings.r2_endpoint or not settings.r2_access_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Media uploads not configured. Use text entries for now.",
+        )
+
     if body.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

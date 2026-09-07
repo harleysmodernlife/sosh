@@ -1,7 +1,7 @@
 // API base URL — update to your local machine's IP when testing on a physical device
 // e.g. "http://192.168.1.42:8000"
 export const API_BASE_URL = __DEV__
-  ? 'http://localhost:8000'
+  ? 'http://100.82.174.33:8000'
   : 'https://sosh-api.fly.dev';
 
 export const SUPABASE_URL = 'https://gxtbcxkdodmfikkhncmw.supabase.co';
