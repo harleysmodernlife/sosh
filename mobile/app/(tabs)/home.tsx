@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,18 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Modal,
+  TextInput,
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import type { Pulse, Post, FeedEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
@@ -41,7 +48,13 @@ export default function HomeScreen() {
   const [moreLoading, setMoreLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const loadingMore = useRef(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: any[] }) => {
     setVisibleKeys(new Set(viewableItems.map(v => v.key)));
@@ -107,6 +120,20 @@ export default function HomeScreen() {
     }
   }
 
+  function handlePostUpdate(postId: string, updated: Partial<Post>) {
+    setItems(prev => prev.map(item =>
+      item.kind === 'post' && item.data.id === postId
+        ? { ...item, data: { ...item.data, ...updated } }
+        : item
+    ));
+    if (editingPost?.id === postId) setEditingPost(p => p ? { ...p, ...updated } : p);
+  }
+
+  function handlePostDelete(postId: string) {
+    setItems(prev => prev.filter(item => !(item.kind === 'post' && item.data.id === postId)));
+    setEditingPost(null);
+  }
+
   function handleLikeUpdate(postId: string, liked: boolean, count: number) {
     setItems(prev => prev.map(item =>
       item.kind === 'post' && item.data.id === postId
@@ -129,7 +156,14 @@ export default function HomeScreen() {
         renderItem={({ item }) => {
           const key = `${item.kind}-${item.data.id}`;
           return item.kind === 'post'
-            ? <PostCard post={item.data} onLikeUpdate={handleLikeUpdate} isVisible={visibleKeys.has(key)} />
+            ? <PostCard
+                post={item.data}
+                onLikeUpdate={handleLikeUpdate}
+                isVisible={visibleKeys.has(key)}
+                isOwn={item.data.user_id === currentUserId}
+                onEdit={() => setEditingPost(item.data)}
+                onDelete={() => handlePostDelete(item.data.id)}
+              />
             : <EntryCard entry={item.data} isVisible={visibleKeys.has(key)} />;
         }}
         ListHeaderComponent={<Header pulse={pulse} />}
@@ -159,6 +193,15 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         style={styles.flatList}
       />
+
+      {editingPost && (
+        <EditPostModal
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onSave={updated => { handlePostUpdate(editingPost.id, updated); setEditingPost(null); }}
+          onDelete={() => handlePostDelete(editingPost.id)}
+        />
+      )}
     </View>
   );
 }
@@ -216,10 +259,16 @@ function PostCard({
   post,
   onLikeUpdate,
   isVisible,
+  isOwn,
+  onEdit,
+  onDelete,
 }: {
   post: Post;
   onLikeUpdate: (id: string, liked: boolean, count: number) => void;
   isVisible: boolean;
+  isOwn: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const [liked, setLiked] = useState(post.viewer_has_liked);
   const [likeCount, setLikeCount] = useState(post.like_count);
@@ -265,6 +314,26 @@ function PostCard({
           <Text style={styles.cardName}>{post.display_name ?? `@${post.username}`}</Text>
           <Text style={styles.cardTime}>{formatTimeAgo(post.created_at)}</Text>
         </View>
+        {isOwn && (
+          <TouchableOpacity
+            style={styles.postMenu}
+            onPress={() => Alert.alert('', '', [
+              { text: 'Edit', onPress: onEdit },
+              { text: 'Delete', style: 'destructive', onPress: () =>
+                Alert.alert('Delete post?', 'This cannot be undone.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: async () => {
+                    try { await api.posts.delete(post.id); onDelete(); }
+                    catch (e: any) { Alert.alert('Error', e.message); }
+                  }},
+                ])
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ])}
+          >
+            <Text style={styles.postMenuDots}>···</Text>
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
 
       {post.content_type !== 'text' && post.media_url ? (
@@ -316,6 +385,95 @@ function EntryCard({ entry, isVisible }: { entry: FeedEntry; isVisible: boolean 
         <Text style={styles.entryVotes}>▲ {entry.vote_count}</Text>
       </View>
     </TouchableOpacity>
+  );
+}
+
+// ─── Edit post modal ──────────────────────────────────────────────────────────
+
+function EditPostModal({
+  post,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  post: Post;
+  onClose: () => void;
+  onSave: (updated: Partial<Post>) => void;
+  onDelete: () => void;
+}) {
+  const [editText, setEditText] = useState(post.text_content ?? '');
+  const [editCaption, setEditCaption] = useState(post.caption ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.posts.update(post.id, {
+        text_content: post.content_type === 'text' ? editText.trim() || undefined : undefined,
+        caption: editCaption.trim() || null,
+      });
+      onSave({
+        text_content: post.content_type === 'text' ? editText.trim() : post.text_content,
+        caption: editCaption.trim() || null,
+      });
+    } catch (err: any) {
+      Alert.alert('Could not save', err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.editModal} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.editModalHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.editModalCancel}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.editModalTitle}>Edit Post</Text>
+          <TouchableOpacity onPress={save} disabled={saving}>
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.editModalSave}>Save</Text>}
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.editModalBody} keyboardShouldPersistTaps="handled">
+          {post.content_type !== 'text' && post.media_url && (
+            <Image source={{ uri: post.media_url }} style={styles.editModalThumb} resizeMode="cover" />
+          )}
+          {post.content_type === 'text' && (
+            <View style={styles.editModalField}>
+              <Text style={styles.editModalLabel}>POST</Text>
+              <TextInput
+                style={styles.editModalInput}
+                value={editText}
+                onChangeText={t => setEditText(t.slice(0, 500))}
+                multiline
+                maxLength={500}
+                placeholder="What's on your mind?"
+                placeholderTextColor="#444"
+                autoFocus
+              />
+              <Text style={styles.editModalCount}>{editText.length}/500</Text>
+            </View>
+          )}
+          <View style={styles.editModalField}>
+            <Text style={styles.editModalLabel}>CAPTION</Text>
+            <TextInput
+              style={styles.editModalInput}
+              value={editCaption}
+              onChangeText={t => setEditCaption(t.slice(0, 300))}
+              multiline
+              maxLength={300}
+              placeholder="Add a caption..."
+              placeholderTextColor="#444"
+              autoFocus={post.content_type !== 'text'}
+            />
+            <Text style={styles.editModalCount}>{editCaption.length}/300</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -416,6 +574,21 @@ const styles = StyleSheet.create({
 
   pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   pauseIcon: { fontSize: 48, color: 'rgba(255,255,255,0.9)' },
+
+  postMenu: { padding: 8 },
+  postMenuDots: { fontSize: 18, color: '#444', letterSpacing: 2 },
+
+  editModal: { flex: 1, backgroundColor: '#000' },
+  editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
+  editModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  editModalCancel: { fontSize: 15, color: '#555', width: 60 },
+  editModalSave: { fontSize: 15, fontWeight: '700', color: '#fff', width: 60, textAlign: 'right' },
+  editModalBody: { padding: 20, gap: 20, paddingBottom: 40 },
+  editModalThumb: { width: '100%', aspectRatio: 4 / 3, borderRadius: 12 },
+  editModalField: { gap: 8 },
+  editModalLabel: { fontSize: 10, fontWeight: '800', color: '#444', letterSpacing: 3 },
+  editModalInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16, color: '#fff', fontSize: 16, lineHeight: 24, minHeight: 80, textAlignVertical: 'top' },
+  editModalCount: { fontSize: 11, color: '#333', textAlign: 'right' },
 
   emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 14, paddingHorizontal: 40 },
   emptyIcon: { fontSize: 40, color: '#1a1a1a' },

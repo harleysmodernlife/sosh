@@ -276,6 +276,11 @@ export default function ProfileScreen() {
             setPosts(prev => prev.filter(p => p.id !== selectedPost.id));
             setSelectedPost(null);
           }}
+          onUpdate={updated => {
+            const merged = { ...selectedPost, ...updated };
+            setPosts(prev => prev.map(p => p.id === selectedPost.id ? merged : p));
+            setSelectedPost(merged);
+          }}
         />
       )}
     </>
@@ -352,11 +357,37 @@ function PostDetailModal({
   post,
   onClose,
   onDelete,
+  onUpdate,
 }: {
   post: Post;
   onClose: () => void;
   onDelete: () => void;
+  onUpdate: (updated: Partial<Post>) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(post.text_content ?? '');
+  const [editCaption, setEditCaption] = useState(post.caption ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function saveEdit() {
+    setSaving(true);
+    try {
+      await api.posts.update(post.id, {
+        text_content: post.content_type === 'text' ? editText.trim() || undefined : undefined,
+        caption: editCaption.trim() || null,
+      });
+      onUpdate({
+        text_content: post.content_type === 'text' ? editText.trim() : post.text_content,
+        caption: editCaption.trim() || null,
+      });
+      setEditing(false);
+    } catch (err: any) {
+      Alert.alert('Could not save', err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function confirmDelete() {
     Alert.alert('Delete post?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -379,31 +410,68 @@ function PostDetailModal({
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.postModalContainer}>
         <View style={styles.postModalHeader}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.postModalClose}>Close</Text>
+          <TouchableOpacity onPress={editing ? () => setEditing(false) : onClose}>
+            <Text style={styles.postModalClose}>{editing ? 'Cancel' : 'Close'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={confirmDelete}>
-            <Text style={styles.postModalDelete}>Delete</Text>
-          </TouchableOpacity>
+          {editing ? (
+            <TouchableOpacity onPress={saveEdit} disabled={saving}>
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.postModalSave}>Save</Text>}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.postModalActions}>
+              <TouchableOpacity onPress={() => setEditing(true)}>
+                <Text style={styles.postModalEdit}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmDelete}>
+                <Text style={styles.postModalDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-        <ScrollView contentContainerStyle={styles.postModalContent}>
+
+        <ScrollView contentContainerStyle={styles.postModalContent} keyboardShouldPersistTaps="handled">
           {post.content_type !== 'text' && post.media_url ? (
             <Image
               source={{ uri: post.media_url }}
               style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
               resizeMode="cover"
             />
+          ) : editing ? (
+            <TextInput
+              style={styles.postModalEditInput}
+              value={editText}
+              onChangeText={t => setEditText(t.slice(0, 500))}
+              multiline
+              maxLength={500}
+              placeholder="Post text..."
+              placeholderTextColor="#444"
+            />
           ) : post.text_content ? (
             <View style={styles.postModalTextBox}>
               <Text style={styles.postModalText}>{post.text_content}</Text>
             </View>
           ) : null}
-          {post.caption ? (
+
+          {editing ? (
+            <View style={styles.postModalCaptionEdit}>
+              <Text style={styles.captionEditLabel}>CAPTION</Text>
+              <TextInput
+                style={styles.postModalEditInput}
+                value={editCaption}
+                onChangeText={t => setEditCaption(t.slice(0, 300))}
+                multiline
+                maxLength={300}
+                placeholder="Add a caption..."
+                placeholderTextColor="#444"
+              />
+            </View>
+          ) : post.caption ? (
             <Text style={styles.postModalCaption}>{post.caption}</Text>
           ) : null}
-          <Text style={styles.postModalMeta}>
-            ♥ {post.like_count} likes
-          </Text>
+
+          {!editing && <Text style={styles.postModalMeta}>♥ {post.like_count} likes</Text>}
         </ScrollView>
       </View>
     </Modal>
@@ -614,10 +682,16 @@ const styles = StyleSheet.create({
   postModalContainer: { flex: 1, backgroundColor: '#000' },
   postModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
   postModalClose: { fontSize: 15, color: '#555' },
+  postModalActions: { flexDirection: 'row', gap: 20 },
+  postModalEdit: { fontSize: 15, color: '#fff', fontWeight: '600' },
+  postModalSave: { fontSize: 15, color: '#fff', fontWeight: '700' },
   postModalDelete: { fontSize: 15, color: '#661111', fontWeight: '600' },
   postModalContent: { padding: 20, gap: 14, paddingBottom: 40 },
   postModalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   postModalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
+  postModalEditInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16, color: '#fff', fontSize: 17, lineHeight: 25, minHeight: 80, textAlignVertical: 'top' },
+  postModalCaptionEdit: { gap: 8 },
+  captionEditLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
   postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
   postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
 });

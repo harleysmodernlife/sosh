@@ -155,6 +155,9 @@ export const api = {
     forUser: (userId: string, offset = 0): Promise<Post[]> =>
       apiFetch(`/posts/user/${userId}?offset=${offset}&limit=30`),
 
+    update: (postId: string, data: { text_content?: string; caption?: string | null }): Promise<void> =>
+      apiFetch(`/posts/${postId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
     delete: (postId: string): Promise<void> =>
       apiFetch(`/posts/${postId}`, { method: 'DELETE' }),
 

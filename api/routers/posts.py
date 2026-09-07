@@ -126,6 +126,33 @@ async def get_user_posts(
     return [dict(r) for r in rows.mappings().all()]
 
 
+class UpdatePostRequest(BaseModel):
+    text_content: str | None = Field(None, max_length=500)
+    caption: str | None = Field(None, max_length=300)
+
+
+@router.patch("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def update_post(
+    post_id: UUID,
+    body: UpdatePostRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        text("""
+            UPDATE posts
+            SET text_content = :text_content,
+                caption = :caption
+            WHERE id = :id AND user_id = :uid
+        """),
+        {"id": post_id, "uid": current_user.user_id,
+         "text_content": body.text_content, "caption": body.caption},
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Post not found or not yours")
+
+
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(
     post_id: UUID,
