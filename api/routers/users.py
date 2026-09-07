@@ -19,6 +19,7 @@ class UserProfile(BaseModel):
     country_code: str | None
     sosh_score: int
     trophy_count: int
+    is_admin: bool = False
 
 
 class UpdateProfileRequest(BaseModel):
@@ -41,7 +42,8 @@ async def get_my_profile(
         text("""
             SELECT u.id, u.username, u.display_name, u.city, u.country_code,
                    COALESCE(s.score, 0) AS sosh_score,
-                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count
+                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
+                   (EXISTS (SELECT 1 FROM user_roles WHERE user_id = u.id AND role = 'admin')) AS is_admin
             FROM users u
             LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
             WHERE u.id = :user_id

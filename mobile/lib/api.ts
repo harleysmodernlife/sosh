@@ -104,6 +104,22 @@ export const api = {
       apiFetch(`/trophies/${userId}`, {}, false),
   },
 
+  // ─── Admin ────────────────────────────────────────────────────────────────
+
+  admin: {
+    firePulse: (data: {
+      prompt: string;
+      submission_window_minutes?: number;
+      voting_window_hours?: number;
+      city?: string;
+      country_code?: string;
+    }): Promise<{ id: string; prompt: string; status: string; submission_ends_at: string; voting_ends_at: string }> =>
+      apiFetch('/admin/pulses', { method: 'POST', body: JSON.stringify(data) }),
+
+    resolvePulse: (pulseId: string): Promise<void> =>
+      apiFetch(`/admin/pulses/${pulseId}/resolve`, { method: 'POST' }),
+  },
+
   // ─── Media ────────────────────────────────────────────────────────────────
 
   media: {

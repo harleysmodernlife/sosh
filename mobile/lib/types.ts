@@ -6,6 +6,7 @@ export interface User {
   country_code: string | null;
   sosh_score: number;
   trophy_count: number;
+  is_admin: boolean;
 }
 
 export interface Pulse {

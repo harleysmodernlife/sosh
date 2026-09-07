@@ -11,7 +11,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { api } from '@/lib/api';
 import type { User, Trophy } from '@/lib/types';
 
@@ -56,9 +56,16 @@ export default function ProfileScreen() {
               <Text style={styles.location}>{user.city}{user.country_code ? `, ${user.country_code}` : ''}</Text>
             )}
           </View>
-          <TouchableOpacity style={styles.editBtn} onPress={() => setEditVisible(true)}>
-            <Text style={styles.editBtnText}>Edit</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {user?.is_admin && (
+              <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')}>
+                <Text style={styles.adminBtnText}>Admin</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.editBtn} onPress={() => setEditVisible(true)}>
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Score */}
@@ -232,6 +239,9 @@ const styles = StyleSheet.create({
   username: { fontSize: 18, fontWeight: '700', color: '#fff' },
   displayName: { fontSize: 14, color: '#888' },
   location: { fontSize: 13, color: '#555' },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  adminBtn: { backgroundColor: '#1a1a0a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#443' },
+  adminBtnText: { color: '#cc0', fontSize: 13, fontWeight: '600' },
   editBtn: { backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
   editBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
