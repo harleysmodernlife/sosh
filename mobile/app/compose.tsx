@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
+import { compressImage } from '@/lib/compress';
 
 type MediaType = 'photo' | 'video';
 
@@ -95,8 +96,9 @@ export default function ComposeScreen() {
     try {
       if (mediaUri) {
         const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+        const uploadUri = mediaType === 'photo' ? await compressImage(mediaUri) : mediaUri;
         const { upload_url, media_key } = await api.media.presign(mimeType);
-        await api.media.upload(upload_url, mediaUri, mimeType);
+        await api.media.upload(upload_url, uploadUri, mimeType);
         await api.posts.create({
           content_type: mediaType,
           media_url: media_key,

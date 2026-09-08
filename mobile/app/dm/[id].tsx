@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import type { DirectMessage } from '@/lib/types';
 
 function formatTime(iso: string) {
@@ -84,8 +85,9 @@ export default function DMThreadScreen() {
       let mediaUrl: string | undefined;
       let mediaType: 'image' | 'video' | undefined;
       if (savedMedia) {
+        const uploadUri = savedMedia.type === 'image' ? await compressImage(savedMedia.uri) : savedMedia.uri;
         const { upload_url, media_key } = await api.media.presign(savedMedia.mimeType);
-        await api.media.upload(upload_url, savedMedia.uri, savedMedia.mimeType);
+        await api.media.upload(upload_url, uploadUri, savedMedia.mimeType);
         // Build public URL from media_key
         const supabaseUrl = 'https://gxtbcxkdodmfikkhncmw.supabase.co';
         mediaUrl = `${supabaseUrl}/storage/v1/object/public/sosh-media/${media_key}`;

@@ -167,6 +167,24 @@ def send_dm_notification(push_token: str, sender_name: str, preview: str, conver
         pass
 
 
+def send_mention_notification(push_token: str, actor_name: str, post_id: str) -> None:
+    """Notify a user that they were @mentioned in a post or comment."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title="You were mentioned",
+                body=f"{actor_name} mentioned you",
+                data={"type": "mention", "post_id": post_id},
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:

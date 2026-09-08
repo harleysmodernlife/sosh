@@ -19,7 +19,7 @@ import re
 
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
-from services.push import send_like_notification, send_comment_notification
+from services.push import send_like_notification, send_comment_notification, send_mention_notification
 from services.notif import create_notification
 
 
@@ -40,7 +40,7 @@ async def _fire_mention_notifications(
     if not usernames:
         return
     rows = await db.execute(
-        text("SELECT id::text FROM users WHERE LOWER(username) = ANY(:names) AND id::text != :actor"),
+        text("SELECT id::text, push_token FROM users WHERE LOWER(username) = ANY(:names) AND id::text != :actor"),
         {"names": usernames, "actor": actor_id},
     )
     for row in rows.mappings().all():
@@ -52,6 +52,8 @@ async def _fire_mention_notifications(
             actor_id=actor_id,
             post_id=post_id,
         )
+        if row["push_token"]:
+            send_mention_notification(row["push_token"], actor_name, post_id)
 
 router = APIRouter()
 

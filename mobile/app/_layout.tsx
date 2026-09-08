@@ -12,12 +12,24 @@ import { MuteProvider } from '@/contexts/MuteContext';
 
 function navigateFromNotification(data: Record<string, unknown>) {
   const type = data?.type;
-  if (type === 'pulse') router.push('/(tabs)/pulse');
-  else if (type === 'trophy') router.push('/(tabs)/profile');
-  else if (type === 'results' || type === 'milestone') router.push('/(tabs)/leaderboard');
-  else if ((type === 'like' || type === 'comment') && data.post_id) router.push(`/post/${data.post_id}`);
-  else if (type === 'follow' && data.user_id) router.push(`/user/${data.user_id}`);
-  else if (type === 'dm' && data.conversation_id) router.push(`/dm/${data.conversation_id}`);
+  if (type === 'pulse') {
+    router.push('/(tabs)/leaderboard');
+  } else if (type === 'trophy') {
+    router.push('/(tabs)/profile');
+  } else if (type === 'results') {
+    router.push('/(tabs)/leaderboard');
+  } else if (type === 'milestone') {
+    router.push('/(tabs)/leaderboard');
+  } else if ((type === 'like' || type === 'comment' || type === 'mention') && data.post_id) {
+    router.push(`/post/${data.post_id}` as any);
+  } else if (type === 'follow' && data.user_id) {
+    router.push(`/user/${data.user_id}` as any);
+  } else if (type === 'dm' && data.conversation_id) {
+    router.push(`/dm/${data.conversation_id}` as any);
+  } else if (type === 'comment' || type === 'mention') {
+    // Fallback if post_id missing
+    router.push('/(tabs)/home');
+  }
 }
 
 SplashScreen.preventAutoHideAsync();

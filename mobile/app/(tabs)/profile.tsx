@@ -19,6 +19,7 @@ import { useFocusEffect, router } from 'expo-router';
 import { CommentsModal } from '@/components/CommentsModal';
 import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import * as ImagePicker from 'expo-image-picker';
+import { compressImage } from '@/lib/compress';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { ProfileSkeleton } from '@/components/Skeleton';
@@ -66,8 +67,9 @@ export default function ProfileScreen() {
 
     setAvatarUploading(true);
     try {
+      const compressed = await compressImage(result.assets[0].uri);
       const { upload_url, media_key: publicUrl } = await api.media.presignAvatar();
-      await api.media.upload(upload_url, result.assets[0].uri, 'image/jpeg');
+      await api.media.upload(upload_url, compressed, 'image/jpeg');
       // Add cache-bust so React Native re-fetches the image
       const bustUrl = `${publicUrl}?t=${Date.now()}`;
       const updated = await api.users.update({ avatar_url: bustUrl });
