@@ -13,6 +13,7 @@ import {
   Dimensions,
   Modal,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { api } from '@/lib/api';
@@ -161,6 +162,11 @@ export default function UserProfileScreen() {
           {user.display_name && <Text style={styles.displayName}>{user.display_name}</Text>}
           {user.city && <Text style={styles.location}>{user.city}</Text>}
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+          {user.website_url ? (
+            <TouchableOpacity onPress={() => Linking.openURL(user.website_url!)}>
+              <Text style={styles.websiteLink} numberOfLines={1}>{user.website_url.replace(/^https?:\/\//, '')}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <View style={styles.profileActions}>
             {!user.viewer_has_blocked && (
@@ -488,6 +494,7 @@ const styles = StyleSheet.create({
   postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
 
   bio: { fontSize: 13, color: '#666', lineHeight: 19, textAlign: 'center', paddingHorizontal: 20 },
+  websiteLink: { fontSize: 13, color: '#5ba3e0', marginTop: 4 },
 
   followModalContainer: { flex: 1, backgroundColor: '#000' },
   followModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },

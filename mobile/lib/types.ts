@@ -3,6 +3,7 @@ export interface User {
   username: string | null;
   display_name: string | null;
   bio: string | null;
+  website_url: string | null;
   city: string | null;
   country_code: string | null;
   avatar_url: string | null;

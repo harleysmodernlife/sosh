@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
+import { MuteProvider } from '@/contexts/MuteContext';
 
 function navigateFromNotification(data: Record<string, unknown>) {
   const type = data?.type;
@@ -101,7 +102,7 @@ export default function RootLayout() {
   if (!initialized) return null;
 
   return (
-    <>
+    <MuteProvider>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#000' } }}>
         <Stack.Screen name="index" />
@@ -117,6 +118,6 @@ export default function RootLayout() {
         <Stack.Screen name="dm/index" />
         <Stack.Screen name="dm/[id]" />
       </Stack>
-    </>
+    </MuteProvider>
   );
 }

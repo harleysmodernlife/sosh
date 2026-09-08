@@ -18,6 +18,7 @@ import { Video, ResizeMode } from 'expo-av';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useFocusEffect } from 'expo-router';
+import { useMute } from '@/contexts/MuteContext';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { LEADERBOARD_POLL_MS } from '@/constants/config';
@@ -257,6 +258,7 @@ function MediaView({
   entry: { content_type: string; media_url: string | null };
   style: object;
 }) {
+  const { muted } = useMute();
   if (!entry.media_url) return null;
   if (entry.content_type === 'video') {
     return (
@@ -266,6 +268,7 @@ function MediaView({
         resizeMode={ResizeMode.COVER}
         shouldPlay
         isLooping
+        isMuted={muted}
         useNativeControls={false}
       />
     );

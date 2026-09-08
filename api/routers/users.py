@@ -40,6 +40,7 @@ class UserProfile(BaseModel):
     following_count: int = 0
     current_streak: int = 0
     longest_streak: int = 0
+    website_url: str | None = None
     viewer_is_following: bool = False
     viewer_has_blocked: bool = False
     is_admin: bool = False
@@ -53,6 +54,7 @@ class UpdateProfileRequest(BaseModel):
     country_code: str | None = Field(None, min_length=2, max_length=2)
     avatar_url: str | None = Field(None, max_length=500)
     accent_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    website_url: str | None = Field(None, max_length=500)
 
 
 class PushTokenRequest(BaseModel):
@@ -67,7 +69,7 @@ async def get_my_profile(
     row = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
-                   u.accent_color,
+                   u.accent_color, u.website_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
@@ -96,7 +98,7 @@ async def search_users(
     rows = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
-                   u.accent_color,
+                   u.accent_color, u.website_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    0 AS follower_count,
@@ -124,7 +126,7 @@ async def suggested_users(
     rows = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
-                   u.accent_color,
+                   u.accent_color, u.website_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
@@ -175,7 +177,7 @@ async def get_user_profile(
     row = await db.execute(
         text("""
             SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
-                   u.accent_color,
+                   u.accent_color, u.website_url,
                    COALESCE(s.score, 0) AS sosh_score,
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
@@ -343,7 +345,7 @@ async def update_my_profile(
     # Use exclude_unset so explicitly sent null values (to clear fields) are included
     updates = body.model_dump(exclude_unset=True)
     # Strip unset non-nullable fields that weren't sent
-    updates = {k: v for k, v in updates.items() if k in ("accent_color", "bio") or v is not None}
+    updates = {k: v for k, v in updates.items() if k in ("accent_color", "bio", "website_url") or v is not None}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 

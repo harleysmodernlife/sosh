@@ -128,11 +128,15 @@ export default function DMThreadScreen() {
           const isMe = item.sender_id === currentUserId;
           const prevMsg = messages[index + 1]; // list is newest-first
           const showAvatar = !isMe && (!prevMsg || prevMsg.sender_id !== item.sender_id);
+          // Show "Seen" under the most recent outgoing message that the other party has read
+          const seenMsgId = messages.find(m => m.sender_id === currentUserId && m.read_at)?.id;
+          const showSeen = isMe && item.id === seenMsgId;
           return (
             <MessageBubble
               msg={item}
               isMe={isMe}
               showAvatar={showAvatar}
+              showSeen={showSeen}
             />
           );
         }}
@@ -196,7 +200,7 @@ function VideoBubble({ uri }: { uri: string }) {
   );
 }
 
-function MessageBubble({ msg, isMe, showAvatar }: { msg: DirectMessage; isMe: boolean; showAvatar: boolean }) {
+function MessageBubble({ msg, isMe, showAvatar, showSeen }: { msg: DirectMessage; isMe: boolean; showAvatar: boolean; showSeen: boolean }) {
   const hasMedia = !!msg.media_url;
   const mediaOnly = hasMedia && !msg.body;
   return (
@@ -228,6 +232,7 @@ function MessageBubble({ msg, isMe, showAvatar }: { msg: DirectMessage; isMe: bo
         ) : null}
         <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{formatTime(msg.created_at)}</Text>
       </View>
+      {showSeen && <Text style={styles.seenLabel}>Seen</Text>}
     </View>
   );
 }
@@ -295,6 +300,8 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.3 },
   sendBtnText: { fontSize: 18, fontWeight: '900', color: '#000' },
+
+  seenLabel: { fontSize: 10, color: '#444', textAlign: 'right', marginTop: 2, paddingRight: 4 },
 
   bubbleMedia: { padding: 4, overflow: 'hidden' },
   mediaBubbleImg: { width: 220, height: 220, borderRadius: 14 },

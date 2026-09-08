@@ -13,6 +13,7 @@ import {
   Modal,
   Dimensions,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { CommentsModal } from '@/components/CommentsModal';
@@ -186,6 +187,11 @@ export default function ProfileScreen() {
             <Text style={styles.username}>@{user?.username ?? '—'}</Text>
             {user?.city && <Text style={styles.location}>{user.city}</Text>}
             {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+            {user?.website_url ? (
+              <TouchableOpacity onPress={() => Linking.openURL(user.website_url!)}>
+                <Text style={styles.websiteLink} numberOfLines={1}>{user.website_url.replace(/^https?:\/\//, '')}</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -200,6 +206,18 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Profile completeness nudge */}
+        {user && !user.avatar_url && !user.bio && (
+          <TouchableOpacity style={styles.completenessNudge} onPress={() => setEditVisible(true)} activeOpacity={0.8}>
+            <Text style={styles.completenessIcon}>✦</Text>
+            <View style={styles.completenessText}>
+              <Text style={styles.completenessTitle}>Complete your profile</Text>
+              <Text style={styles.completenessBody}>Add a photo and bio so people know who you are.</Text>
+            </View>
+            <Text style={styles.completenessArrow}>›</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Score */}
         <View style={styles.scoreRow}>
@@ -689,6 +707,7 @@ function EditProfileModal({
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [city, setCity] = useState(user?.city ?? '');
+  const [websiteUrl, setWebsiteUrl] = useState(user?.website_url ?? '');
   const [accentColor, setAccentColor] = useState<string | null>(user?.accent_color ?? null);
   const [saving, setSaving] = useState(false);
 
@@ -707,6 +726,7 @@ function EditProfileModal({
         bio: bio.trim() || null,
         city: city || undefined,
         accent_color: accentColor,
+        website_url: websiteUrl.trim() || null,
       });
       onSave(updated);
     } catch (err: any) {
@@ -788,6 +808,21 @@ function EditProfileModal({
           </View>
 
           <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>WEBSITE</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={websiteUrl}
+              onChangeText={setWebsiteUrl}
+              placeholder="https://yoursite.com"
+              placeholderTextColor="#444"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              maxLength={500}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>ACCENT COLOR</Text>
             <View style={styles.colorPicker}>
               {ACCENT_PALETTE.map(({ hex, label }) => (
@@ -840,6 +875,19 @@ const styles = StyleSheet.create({
   adminBtnText: { color: '#aa9900', fontSize: 13, fontWeight: '600' },
   editBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#333', backgroundColor: '#111' },
   editBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  websiteLink: { fontSize: 13, color: '#5ba3e0', marginTop: 2 },
+
+  completenessNudge: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#0a0f1a', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#1a2a3a',
+  },
+  completenessIcon: { fontSize: 20, color: '#5ba3e0' },
+  completenessText: { flex: 1, gap: 2 },
+  completenessTitle: { fontSize: 14, fontWeight: '700', color: '#ccc' },
+  completenessBody: { fontSize: 12, color: '#555', lineHeight: 17 },
+  completenessArrow: { fontSize: 22, color: '#333' },
 
   scoreRow: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
   statBox: { flex: 1, paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 4 },

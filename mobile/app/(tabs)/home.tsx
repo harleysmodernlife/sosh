@@ -25,11 +25,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import type { Pulse, Post, FeedEntry } from '@/lib/types';
+import type { Pulse, Post, FeedEntry, User } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 import { CommentsModal } from '@/components/CommentsModal';
 import { FeedSkeleton } from '@/components/Skeleton';
 import { MentionText } from '@/components/MentionText';
+import { useMute } from '@/contexts/MuteContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PAGE = 20;
@@ -58,6 +59,8 @@ export default function HomeScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [feedMode, setFeedMode] = useState<'foryou' | 'following'>('foryou');
+  const [suggested, setSuggested] = useState<User[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const loadingMore = useRef(false);
 
   useEffect(() => {
@@ -83,6 +86,10 @@ export default function HomeScreen() {
       setEntryOffset(entries.length);
       setPostsEnd(posts.length < PAGE);
       setEntriesEnd(entries.length < PAGE);
+      // Load suggested users if feed is empty
+      if (posts.length === 0 && entries.length === 0) {
+        api.users.suggested().then(setSuggested).catch(() => {});
+      }
     } catch {}
     finally {
       setLoading(false);
@@ -204,25 +211,15 @@ export default function HomeScreen() {
         }}
         ListHeaderComponent={<Header pulse={pulse} feedMode={feedMode} onToggleFeed={setFeedMode} />}
         ListEmptyComponent={
-          feedMode === 'following' ? (
-            <View style={styles.emptyFeed}>
-              <Text style={styles.emptyIcon}>◈</Text>
-              <Text style={styles.emptyTitle}>Nobody here yet.</Text>
-              <Text style={styles.emptyText}>Follow people to see their posts here.</Text>
-              <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/(tabs)/search')}>
-                <Text style={styles.emptyComposeText}>Find people</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.emptyFeed}>
-              <Text style={styles.emptyIcon}>◉</Text>
-              <Text style={styles.emptyTitle}>Nothing here yet.</Text>
-              <Text style={styles.emptyText}>Be the first to post something.</Text>
-              <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/compose')}>
-                <Text style={styles.emptyComposeText}>Make a post</Text>
-              </TouchableOpacity>
-            </View>
-          )
+          <EmptyFeedState
+            feedMode={feedMode}
+            suggested={suggested}
+            followingIds={followingIds}
+            onFollow={id => {
+              api.users.follow(id).catch(() => {});
+              setFollowingIds(prev => new Set(prev).add(id));
+            }}
+          />
         }
         ListFooterComponent={
           moreLoading ? (
@@ -709,6 +706,7 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
   onDoubleTap?: () => void;
 }) {
   const [paused, setPaused] = useState(false);
+  const { muted, toggleMute } = useMute();
   const playing = isVisible && !paused;
   const lastTapRef = useRef(0);
 
@@ -737,6 +735,7 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
           resizeMode={ResizeMode.COVER}
           shouldPlay={playing}
           isLooping
+          isMuted={muted}
           useNativeControls={false}
         />
         {!playing && (
@@ -744,6 +743,9 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
             <Text style={styles.pauseIcon}>▶</Text>
           </View>
         )}
+        <TouchableOpacity style={styles.muteBtn} onPress={e => { e.stopPropagation?.(); toggleMute(); }} activeOpacity={0.8}>
+          <Text style={styles.muteBtnIcon}>{muted ? '🔇' : '🔊'}</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   }
@@ -767,6 +769,82 @@ function formatTimeAgo(isoString: string): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+// ─── Empty Feed State ─────────────────────────────────────────────────────────
+
+function EmptyFeedState({
+  feedMode,
+  suggested,
+  followingIds,
+  onFollow,
+}: {
+  feedMode: 'foryou' | 'following';
+  suggested: User[];
+  followingIds: Set<string>;
+  onFollow: (id: string) => void;
+}) {
+  if (feedMode === 'following') {
+    return (
+      <View style={styles.emptyFeed}>
+        <Text style={styles.emptyIcon}>◈</Text>
+        <Text style={styles.emptyTitle}>Nobody here yet</Text>
+        <Text style={styles.emptyText}>Follow people to see their posts here.</Text>
+        <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/(tabs)/search')}>
+          <Text style={styles.emptyComposeText}>Find people →</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.emptyFeed}>
+      <Text style={styles.emptyIcon}>◉</Text>
+      <Text style={styles.emptyTitle}>Nothing here yet</Text>
+      {suggested.length > 0 ? (
+        <>
+          <Text style={styles.emptyText}>Get started by following some people.</Text>
+          <View style={styles.suggestedList}>
+            {suggested.slice(0, 5).map(u => (
+              <View key={u.id} style={styles.suggestedRow}>
+                <TouchableOpacity
+                  style={styles.suggestedAvatar}
+                  onPress={() => router.push(`/user/${u.id}`)}
+                >
+                  {u.avatar_url ? (
+                    <Image source={{ uri: u.avatar_url }} style={styles.suggestedAvatarImg} />
+                  ) : (
+                    <Text style={[styles.suggestedAvatarLetter, u.accent_color ? { color: u.accent_color } : undefined]}>
+                      {(u.username ?? '?')[0].toUpperCase()}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.suggestedName} onPress={() => router.push(`/user/${u.id}`)}>
+                  <Text style={styles.suggestedDisplayName} numberOfLines={1}>
+                    {u.display_name ?? `@${u.username}`}
+                  </Text>
+                  {u.display_name && <Text style={styles.suggestedHandle}>@{u.username}</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.suggestedFollowBtn, followingIds.has(u.id) && styles.suggestedFollowBtnDone]}
+                  onPress={() => !followingIds.has(u.id) && onFollow(u.id)}
+                >
+                  <Text style={[styles.suggestedFollowText, followingIds.has(u.id) && styles.suggestedFollowTextDone]}>
+                    {followingIds.has(u.id) ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : (
+        <Text style={styles.emptyText}>Be the first to post something.</Text>
+      )}
+      <TouchableOpacity style={styles.emptyCompose} onPress={() => router.push('/compose')}>
+        <Text style={styles.emptyComposeText}>Make a post →</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -846,6 +924,8 @@ const styles = StyleSheet.create({
 
   pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   pauseIcon: { fontSize: 48, color: 'rgba(255,255,255,0.9)' },
+  muteBtn: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 16, padding: 6 },
+  muteBtnIcon: { fontSize: 14 },
 
   postMenu: { padding: 8 },
   postMenuDots: { fontSize: 18, color: '#444', letterSpacing: 2 },
@@ -862,12 +942,28 @@ const styles = StyleSheet.create({
   editModalInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16, color: '#fff', fontSize: 16, lineHeight: 24, minHeight: 80, textAlignVertical: 'top' },
   editModalCount: { fontSize: 11, color: '#333', textAlign: 'right' },
 
-  emptyFeed: { alignItems: 'center', paddingTop: 60, gap: 14, paddingHorizontal: 40 },
+  emptyFeed: { alignItems: 'center', paddingTop: 48, gap: 14, paddingHorizontal: 32, paddingBottom: 40 },
   emptyIcon: { fontSize: 40, color: '#1a1a1a' },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: '#2a2a2a' },
   emptyText: { fontSize: 14, color: '#222', textAlign: 'center', lineHeight: 21 },
   emptyCompose: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, backgroundColor: '#fff' },
   emptyComposeText: { fontSize: 14, fontWeight: '700', color: '#000' },
+
+  suggestedList: { width: '100%', gap: 10, marginTop: 4 },
+  suggestedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  suggestedAvatar: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: '#1a1a1a',
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#222', overflow: 'hidden', flexShrink: 0,
+  },
+  suggestedAvatarImg: { width: 38, height: 38, borderRadius: 19 },
+  suggestedAvatarLetter: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  suggestedName: { flex: 1 },
+  suggestedDisplayName: { fontSize: 14, fontWeight: '700', color: '#ccc' },
+  suggestedHandle: { fontSize: 11, color: '#444' },
+  suggestedFollowBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#fff' },
+  suggestedFollowBtnDone: { borderColor: '#333' },
+  suggestedFollowText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  suggestedFollowTextDone: { color: '#444' },
   footerLoader: { paddingVertical: 24, alignItems: 'center' },
   feedEnd: { textAlign: 'center', color: '#222', fontSize: 12, paddingVertical: 24 },
 });
