@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
+from services.push import send_dm_notification
 
 router = APIRouter()
 
@@ -164,6 +165,20 @@ async def send_message(
     if not access.first():
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # Fetch sender name and recipient push token in one query
+    info = await db.execute(
+        text("""
+            SELECT COALESCE(u.display_name, '@' || u.username) AS sender_name,
+                   r.push_token AS recipient_token
+            FROM users u
+            JOIN conversation_participants cp ON cp.conversation_id = :cid AND cp.user_id != :sender
+            JOIN users r ON r.id = cp.user_id
+            WHERE u.id = :sender
+        """),
+        {"cid": conversation_id, "sender": current_user.user_id},
+    )
+    meta = info.mappings().first() or {}
+
     msg_id = str(uuid4())
     await db.execute(
         text("""
@@ -173,6 +188,10 @@ async def send_message(
         {"id": msg_id, "cid": conversation_id, "sender": current_user.user_id, "body": body.body},
     )
     await db.commit()
+
+    if meta.get("recipient_token"):
+        preview = body.body if len(body.body) <= 80 else body.body[:77] + "..."
+        send_dm_notification(meta["recipient_token"], meta["sender_name"], preview, str(conversation_id))
 
     row = await db.execute(
         text("""

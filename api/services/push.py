@@ -149,6 +149,24 @@ def send_comment_notification(push_token: str, commenter_name: str, post_id: str
         pass
 
 
+def send_dm_notification(push_token: str, sender_name: str, preview: str, conversation_id: str) -> None:
+    """Notify a user they received a direct message."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=sender_name,
+                body=preview,
+                data={"type": "dm", "conversation_id": conversation_id},
+                sound="default",
+                priority="high",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:

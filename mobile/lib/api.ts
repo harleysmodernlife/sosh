@@ -166,6 +166,9 @@ export const api = {
     }): Promise<Post> =>
       apiFetch('/posts', { method: 'POST', body: JSON.stringify(data) }),
 
+    search: (q: string): Promise<Post[]> =>
+      apiFetch(`/posts/search?q=${encodeURIComponent(q)}`),
+
     feed: (offset = 0, limit = 20, mode: 'foryou' | 'following' = 'foryou'): Promise<Post[]> =>
       apiFetch(`/posts/feed?offset=${offset}&limit=${limit}&mode=${mode}`),
 

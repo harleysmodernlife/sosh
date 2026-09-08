@@ -73,6 +73,32 @@ async def create_post(
     return dict(row.mappings().first())
 
 
+@router.get("/search")
+async def search_posts(
+    q: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
+                   u.username, u.display_name, u.avatar_url, u.accent_color,
+                   (EXISTS (
+                       SELECT 1 FROM post_likes pl
+                       WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
+                   )) AS viewer_has_liked
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.text_content ILIKE :q OR p.caption ILIKE :q
+            ORDER BY p.created_at DESC
+            LIMIT 40
+        """),
+        {"viewer_id": current_user.user_id, "q": f"%{q}%"},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
 @router.get("/feed")
 async def get_post_feed(
     offset: int = 0,

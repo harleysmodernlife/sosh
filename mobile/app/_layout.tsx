@@ -16,6 +16,7 @@ function navigateFromNotification(data: Record<string, unknown>) {
   else if (type === 'results' || type === 'milestone') router.push('/(tabs)/leaderboard');
   else if ((type === 'like' || type === 'comment') && data.post_id) router.push(`/post/${data.post_id}`);
   else if (type === 'follow' && data.user_id) router.push(`/user/${data.user_id}`);
+  else if (type === 'dm' && data.conversation_id) router.push(`/dm/${data.conversation_id}`);
 }
 
 SplashScreen.preventAutoHideAsync();

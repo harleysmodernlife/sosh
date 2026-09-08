@@ -35,9 +35,13 @@ export default function ProfileScreen() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [dmUnreadCount, setDmUnreadCount] = useState(0);
 
   useEffect(() => {
     api.notifications.unreadCount().then(r => setUnreadCount(r.count)).catch(() => {});
+    api.dm.conversations().then(convs => {
+      setDmUnreadCount(convs.reduce((sum, c) => sum + (c.unread_count || 0), 0));
+    }).catch(() => {});
   }, []);
 
   async function pickAndUploadAvatar() {
@@ -130,6 +134,11 @@ export default function ProfileScreen() {
           <View style={styles.topBarIcons}>
             <TouchableOpacity style={styles.topBarIcon} onPress={() => router.push('/dm')}>
               <Text style={styles.topBarIconText}>DM</Text>
+              {dmUnreadCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>{dmUnreadCount > 9 ? '9+' : dmUnreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.topBarIcon} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
               <Text style={styles.topBarIconText}>🔔</Text>
