@@ -12,12 +12,15 @@ import {
   Image,
   Modal,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { CommentsModal } from '@/components/CommentsModal';
+import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
+import { ProfileSkeleton } from '@/components/Skeleton';
 import type { User, UserSummary, Trophy, MyEntry, Post } from '@/lib/types';
 import { ACCENT_PALETTE } from '@/lib/types';
 
@@ -31,6 +34,7 @@ export default function ProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
@@ -103,7 +107,8 @@ export default function ProfileScreen() {
     }
   }
 
-  async function load() {
+  async function load(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
     try {
       const me = await api.users.me();
       const [myTrophies, myEntries, myPosts] = await Promise.all([
@@ -116,18 +121,22 @@ export default function ProfileScreen() {
       setEntries(myEntries);
       setPosts(myPosts);
     } catch {}
-    finally { setLoading(false); }
+    finally { setLoading(false); setRefreshing(false); }
   }
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
+    return <View style={[styles.container, { flex: 1 }]}><ProfileSkeleton /></View>;
   }
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#fff" />}
+      >
         {/* Top bar */}
         <View style={styles.topBar}>
           <Text style={styles.topBarWordmark}>SÖSH</Text>
@@ -479,6 +488,7 @@ function PostDetailModal({
   const [saving, setSaving] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(post.comment_count);
+  const [mediaFull, setMediaFull] = useState(false);
 
   async function saveEdit() {
     setSaving(true);
@@ -544,11 +554,16 @@ function PostDetailModal({
 
         <ScrollView contentContainerStyle={styles.postModalContent} keyboardShouldPersistTaps="handled">
           {post.content_type !== 'text' && post.media_url ? (
-            <Image
-              source={{ uri: post.media_url }}
-              style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
-              resizeMode="cover"
-            />
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setMediaFull(true)}>
+              <Image
+                source={{ uri: post.media_url }}
+                style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
+                resizeMode="cover"
+              />
+              <View style={styles.expandHint}>
+                <Text style={styles.expandHintText}>⤢ Tap to expand</Text>
+              </View>
+            </TouchableOpacity>
           ) : editing ? (
             <TextInput
               style={styles.postModalEditInput}
@@ -599,6 +614,15 @@ function PostDetailModal({
         onClose={() => setShowComments(false)}
         onCountChange={delta => setCommentCount(c => c + delta)}
       />
+
+      {post.media_url && post.content_type !== 'text' && (
+        <FullScreenMediaModal
+          visible={mediaFull}
+          uri={post.media_url}
+          type={post.content_type}
+          onClose={() => setMediaFull(false)}
+        />
+      )}
     </Modal>
   );
 }
@@ -848,6 +872,8 @@ const styles = StyleSheet.create({
   gridVideoIconText: { fontSize: 10, color: '#fff' },
   newPostCta: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', borderStyle: 'dashed' },
   newPostCtaText: { fontSize: 13, color: '#333', fontWeight: '600' },
+  expandHint: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  expandHintText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
 
   // Post detail modal
   postModalContainer: { flex: 1, backgroundColor: '#000' },

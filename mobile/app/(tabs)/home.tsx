@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
@@ -16,7 +17,9 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
@@ -25,6 +28,7 @@ import { supabase } from '@/lib/supabase';
 import type { Pulse, Post, FeedEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 import { CommentsModal } from '@/components/CommentsModal';
+import { FeedSkeleton } from '@/components/Skeleton';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PAGE = 20;
@@ -164,7 +168,16 @@ export default function HomeScreen() {
   }
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.wordmark}>SÖSH</Text>
+          </View>
+        </View>
+        <FeedSkeleton />
+      </View>
+    );
   }
 
   const allEnd = postsEnd && entriesEnd;
@@ -212,7 +225,9 @@ export default function HomeScreen() {
         }
         ListFooterComponent={
           moreLoading ? (
-            <View style={styles.footerLoader}><ActivityIndicator color="#333" /></View>
+            <View style={styles.footerLoader}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#1a1a1a', opacity: 0.5 }} />
+            </View>
           ) : allEnd && items.length > 0 ? (
             <Text style={styles.feedEnd}>You're all caught up.</Text>
           ) : null
@@ -332,6 +347,33 @@ function PostCard({
   const [commentCount, setCommentCount] = useState(post.comment_count);
   const [showComments, setShowComments] = useState(false);
   const [inFlight, setInFlight] = useState(false);
+  const lastTapRef = useRef(0);
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
+
+  function showHeart() {
+    heartScale.setValue(0.5);
+    heartOpacity.setValue(0.9);
+    Animated.parallel([
+      Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, friction: 4 }),
+      Animated.sequence([
+        Animated.delay(400),
+        Animated.timing(heartOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }
+
+  function handleDoubleTap() {
+    if (!liked) toggleLike();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showHeart();
+  }
+
+  function handleContentTap() {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) handleDoubleTap();
+    lastTapRef.current = now;
+  }
 
   async function handleShare() {
     const deepLink = `sosh://post/${post.id}`;
@@ -347,6 +389,7 @@ function PostCard({
 
   async function toggleLike() {
     if (inFlight) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInFlight(true);
     const wasLiked = liked;
     const newCount = likeCount + (wasLiked ? -1 : 1);
@@ -439,15 +482,32 @@ function PostCard({
         </TouchableOpacity>
       </TouchableOpacity>
 
-      {post.content_type !== 'text' && post.media_url ? (
-        <MediaView uri={post.media_url} type={post.content_type} style={styles.cardImage} isVisible={isVisible} />
-      ) : post.text_content ? (
-        <View style={styles.cardTextBox}>
-          <Text style={styles.cardText}>{post.text_content}</Text>
-        </View>
-      ) : null}
+      <View style={styles.cardContent}>
+        {post.content_type !== 'text' && post.media_url ? (
+          <MediaView
+            uri={post.media_url}
+            type={post.content_type}
+            style={styles.cardImage}
+            isVisible={isVisible}
+            onDoubleTap={handleDoubleTap}
+          />
+        ) : post.text_content ? (
+          <Pressable onPress={handleContentTap}>
+            <View style={styles.cardTextBox}>
+              <Text style={styles.cardText}>{post.text_content}</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
-      {post.caption ? <Text style={styles.cardCaption} numberOfLines={3}>{post.caption}</Text> : null}
+        {post.caption ? <Text style={styles.cardCaption} numberOfLines={3}>{post.caption}</Text> : null}
+
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
+        >
+          <Text style={styles.heartGlyph}>♥</Text>
+        </Animated.View>
+      </View>
 
       <View style={styles.cardActions}>
         <TouchableOpacity style={styles.likeBtn} onPress={toggleLike} activeOpacity={0.7}>
@@ -599,13 +659,36 @@ function EditPostModal({
 
 // ─── Shared media renderer ────────────────────────────────────────────────────
 
-function MediaView({ uri, type, style, isVisible }: { uri: string; type: string; style: object; isVisible: boolean }) {
+function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
+  uri: string;
+  type: string;
+  style: any;
+  isVisible: boolean;
+  onDoubleTap?: () => void;
+}) {
   const [paused, setPaused] = useState(false);
   const playing = isVisible && !paused;
+  const lastTapRef = useRef(0);
+
+  function handleVideoPress() {
+    const now = Date.now();
+    if (onDoubleTap && now - lastTapRef.current < 300) {
+      onDoubleTap();
+    } else {
+      setPaused(p => !p);
+    }
+    lastTapRef.current = now;
+  }
+
+  function handleImageTap() {
+    const now = Date.now();
+    if (onDoubleTap && now - lastTapRef.current < 300) onDoubleTap();
+    lastTapRef.current = now;
+  }
 
   if (type === 'video') {
     return (
-      <TouchableOpacity onPress={() => setPaused(p => !p)} activeOpacity={1} style={style}>
+      <TouchableOpacity onPress={handleVideoPress} activeOpacity={1} style={style}>
         <Video
           source={{ uri }}
           style={StyleSheet.absoluteFill}
@@ -620,6 +703,13 @@ function MediaView({ uri, type, style, isVisible }: { uri: string; type: string;
           </View>
         )}
       </TouchableOpacity>
+    );
+  }
+  if (onDoubleTap) {
+    return (
+      <Pressable onPress={handleImageTap} style={style}>
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      </Pressable>
     );
   }
   return <Image source={{ uri }} style={style} resizeMode="cover" />;
@@ -669,6 +759,9 @@ const styles = StyleSheet.create({
   pulseCta: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
 
   card: { borderBottomWidth: 1, borderBottomColor: '#111', paddingBottom: 16, marginTop: 16, gap: 12 },
+  cardContent: { position: 'relative' },
+  heartOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  heartGlyph: { fontSize: 90, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 24 },
 
   // Post card
   cardAuthor: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },

@@ -5,12 +5,12 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Image,
   RefreshControl,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { api } from '@/lib/api';
+import { DMListSkeleton } from '@/components/Skeleton';
 import type { Conversation } from '@/lib/types';
 
 function formatTimeAgo(iso: string) {
@@ -42,7 +42,18 @@ export default function DMListScreen() {
   useFocusEffect(useCallback(() => { load(); }, []));
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backTap}>
+            <Text style={styles.backArrow}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Messages</Text>
+          <View style={styles.backTap} />
+        </View>
+        <DMListSkeleton />
+      </View>
+    );
   }
 
   return (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
   Image,
   Dimensions,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { api } from '@/lib/api';
@@ -25,29 +27,34 @@ export default function UserProfileScreen() {
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [mediaFull, setMediaFull] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [followInFlight, setFollowInFlight] = useState(false);
   const [blockInFlight, setBlockInFlight] = useState(false);
   const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [u, t, p] = await Promise.all([
-          api.users.get(id),
-          api.trophies.forUser(id),
-          api.posts.forUser(id),
-        ]);
-        setUser(u);
-        setTrophies(t);
-        setPosts(p);
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
+  async function load(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const [u, t, p] = await Promise.all([
+        api.users.get(id),
+        api.trophies.forUser(id),
+        api.posts.forUser(id),
+      ]);
+      setUser(u);
+      setTrophies(t);
+      setPosts(p);
+    } catch {
+      setNotFound(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }
+
+  useEffect(() => {
     if (id) load();
   }, [id]);
 
@@ -129,7 +136,11 @@ export default function UserProfileScreen() {
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#fff" />}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.back}>←</Text>
@@ -288,11 +299,16 @@ export default function UserProfileScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.postModalContent}>
               {selectedPost.content_type !== 'text' && selectedPost.media_url ? (
-                <Image
-                  source={{ uri: selectedPost.media_url }}
-                  style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
-                  resizeMode="cover"
-                />
+                <TouchableOpacity activeOpacity={0.9} onPress={() => setMediaFull(true)} style={{ position: 'relative' }}>
+                  <Image
+                    source={{ uri: selectedPost.media_url }}
+                    style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.expandHint}>
+                    <Text style={styles.expandHintText}>⤢ Tap to expand</Text>
+                  </View>
+                </TouchableOpacity>
               ) : selectedPost.text_content ? (
                 <View style={styles.postModalTextBox}>
                   <Text style={styles.postModalText}>{selectedPost.text_content}</Text>
@@ -305,6 +321,14 @@ export default function UserProfileScreen() {
             </ScrollView>
           </View>
         </Modal>
+      )}
+      {selectedPost?.media_url && selectedPost.content_type !== 'text' && (
+        <FullScreenMediaModal
+          visible={mediaFull}
+          uri={selectedPost.media_url}
+          type={selectedPost.content_type}
+          onClose={() => setMediaFull(false)}
+        />
       )}
       {followList && (
         <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setFollowList(null)}>
@@ -467,6 +491,8 @@ const styles = StyleSheet.create({
   followEmpty: { paddingTop: 60, alignItems: 'center' },
   followEmptyText: { color: '#333', fontSize: 14 },
 
+  expandHint: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  expandHintText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   notFoundText: { fontSize: 16, color: '#444' },
   backLink: { fontSize: 14, color: '#555' },
 });

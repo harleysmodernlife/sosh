@@ -5,12 +5,12 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Image,
   RefreshControl,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api } from '@/lib/api';
+import { NotificationsSkeleton } from '@/components/Skeleton';
 import type { Notification } from '@/lib/types';
 
 function formatTimeAgo(iso: string) {
@@ -67,7 +67,16 @@ export default function NotificationsScreen() {
   useFocusEffect(useCallback(() => { load(); }, []));
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.backTap} />
+          <Text style={styles.title}>Notifications</Text>
+          <View style={styles.backTap} />
+        </View>
+        <NotificationsSkeleton />
+      </View>
+    );
   }
 
   return (

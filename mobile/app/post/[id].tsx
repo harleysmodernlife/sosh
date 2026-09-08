@@ -1,21 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Pressable,
   Image,
   ScrollView,
   Alert,
   Share,
   Dimensions,
+  Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Video, ResizeMode } from 'expo-av';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { CommentsModal } from '@/components/CommentsModal';
+import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import type { Post } from '@/lib/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -40,6 +44,11 @@ export default function PostScreen() {
   const [showComments, setShowComments] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState(false);
+  const [mediaFullScreen, setMediaFullScreen] = useState(false);
+  const lastTapRef = useRef(0);
+  const doubleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
@@ -70,8 +79,41 @@ export default function PostScreen() {
     } catch {}
   }
 
+  function showHeart() {
+    heartScale.setValue(0.5);
+    heartOpacity.setValue(0.9);
+    Animated.parallel([
+      Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, friction: 4 }),
+      Animated.sequence([
+        Animated.delay(400),
+        Animated.timing(heartOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }
+
+  function handleDoubleTap() {
+    if (!liked) toggleLike();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showHeart();
+  }
+
+  function handleContentTap() {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
+      lastTapRef.current = 0;
+      handleDoubleTap();
+    } else {
+      lastTapRef.current = now;
+      if (post?.content_type !== 'text') {
+        doubleTapTimer.current = setTimeout(() => setMediaFullScreen(true), 280);
+      }
+    }
+  }
+
   async function toggleLike() {
     if (!post || inFlight) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInFlight(true);
     const wasLiked = liked;
     setLiked(!wasLiked);
@@ -161,24 +203,39 @@ export default function PostScreen() {
           </View>
         </TouchableOpacity>
 
-        {post.content_type !== 'text' && post.media_url ? (
-          post.content_type === 'video' ? (
-            <Video
-              source={{ uri: post.media_url }}
-              style={styles.media}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay
-              isLooping
-              useNativeControls={false}
-            />
-          ) : (
-            <Image source={{ uri: post.media_url }} style={styles.media} resizeMode="cover" />
-          )
-        ) : post.text_content ? (
-          <View style={styles.textBox}>
-            <Text style={styles.textContent}>{post.text_content}</Text>
-          </View>
-        ) : null}
+        <View style={styles.mediaContainer}>
+          {post.content_type !== 'text' && post.media_url ? (
+            post.content_type === 'video' ? (
+              <TouchableOpacity onPress={handleContentTap} activeOpacity={1} style={styles.media}>
+                <Video
+                  source={{ uri: post.media_url }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay
+                  isLooping
+                  useNativeControls={false}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Pressable onPress={handleContentTap} style={styles.media}>
+                <Image source={{ uri: post.media_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              </Pressable>
+            )
+          ) : post.text_content ? (
+            <Pressable onPress={handleContentTap}>
+              <View style={styles.textBox}>
+                <Text style={styles.textContent}>{post.text_content}</Text>
+              </View>
+            </Pressable>
+          ) : null}
+
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}
+          >
+            <Text style={styles.heartGlyph}>♥</Text>
+          </Animated.View>
+        </View>
 
         {post.caption ? (
           <Text style={styles.caption}>{post.caption}</Text>
@@ -205,6 +262,15 @@ export default function PostScreen() {
         onClose={() => setShowComments(false)}
         onCountChange={delta => setCommentCount(c => c + delta)}
       />
+
+      {post.media_url && post.content_type !== 'text' && (
+        <FullScreenMediaModal
+          visible={mediaFullScreen}
+          uri={post.media_url}
+          type={post.content_type}
+          onClose={() => setMediaFullScreen(false)}
+        />
+      )}
     </View>
   );
 }
@@ -237,7 +303,10 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 15, fontWeight: '700', color: '#fff' },
   authorTime: { fontSize: 12, color: '#555' },
 
+  mediaContainer: { position: 'relative' },
   media: { width: SCREEN_WIDTH, aspectRatio: 4 / 3 },
+  heartOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  heartGlyph: { fontSize: 90, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 24 },
   textBox: { marginHorizontal: 20, backgroundColor: '#0d0d0d', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   textContent: { fontSize: 22, color: '#fff', lineHeight: 30, fontWeight: '500' },
   caption: { fontSize: 15, color: '#888', paddingHorizontal: 20, lineHeight: 22 },

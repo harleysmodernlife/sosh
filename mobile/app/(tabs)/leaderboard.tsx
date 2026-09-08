@@ -11,6 +11,7 @@ import {
   Modal,
   ScrollView,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -26,13 +27,15 @@ export default function LeaderboardScreen() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [votingInFlight, setVotingInFlight] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<(Entry & { rank: number }) | null>(null);
   const [lastResolved, setLastResolved] = useState<ResolvedPulse | null>(null);
   const [lastEntries, setLastEntries] = useState<Entry[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  async function load() {
+  async function load(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
     try {
       const p = await api.pulses.active();
       setPulse(p);
@@ -54,7 +57,7 @@ export default function LeaderboardScreen() {
         }
       }
     } catch {}
-    finally { setLoading(false); }
+    finally { setLoading(false); setRefreshing(false); }
   }
 
   useFocusEffect(useCallback(() => {
@@ -155,6 +158,7 @@ export default function LeaderboardScreen() {
           data={rankedLast}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#fff" />}
           renderItem={({ item }) => (
             <EntryCard
               entry={item}
@@ -207,6 +211,7 @@ export default function LeaderboardScreen() {
           data={ranked}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#fff" />}
           renderItem={({ item }) => (
             <EntryCard
               entry={item}
