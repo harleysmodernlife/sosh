@@ -185,7 +185,7 @@ export default function UserProfileScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.msgBtnText}>✉</Text>
+                <Text style={styles.msgBtnText}>DM</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -397,8 +397,8 @@ const styles = StyleSheet.create({
   location: { fontSize: 13, color: '#444' },
   profileActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   followBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
-  msgBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center' },
-  msgBtnText: { fontSize: 18, color: '#555' },
+  msgBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center' },
+  msgBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   blockedBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#333', backgroundColor: 'transparent' },
   blockedBtnText: { fontSize: 14, fontWeight: '700', color: '#555' },
   blockedNotice: { fontSize: 13, color: '#444', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },

@@ -129,7 +129,7 @@ export default function ProfileScreen() {
           <Text style={styles.topBarWordmark}>SÖSH</Text>
           <View style={styles.topBarIcons}>
             <TouchableOpacity style={styles.topBarIcon} onPress={() => router.push('/dm')}>
-              <Text style={styles.topBarIconText}>✉</Text>
+              <Text style={styles.topBarIconText}>DM</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.topBarIcon} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
               <Text style={styles.topBarIconText}>🔔</Text>
@@ -739,8 +739,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   topBarWordmark: { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: 5 },
   topBarIcons: { flexDirection: 'row', gap: 4 },
-  topBarIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  topBarIconText: { fontSize: 20 },
+  topBarIcon: { height: 36, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', position: 'relative', borderRadius: 18, borderWidth: 1, borderColor: '#222' },
+  topBarIconText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0 },

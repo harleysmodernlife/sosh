@@ -62,7 +62,7 @@ export default function DMListScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#fff" />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>✉</Text>
+            <Text style={styles.emptyIcon}>◻</Text>
             <Text style={styles.emptyTitle}>No messages yet.</Text>
             <Text style={styles.emptyText}>Go to someone's profile and tap Message.</Text>
           </View>
