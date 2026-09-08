@@ -11,6 +11,8 @@ export interface User {
   trophy_count: number;
   follower_count: number;
   following_count: number;
+  current_streak: number;
+  longest_streak: number;
   viewer_is_following: boolean;
   viewer_has_blocked: boolean;
   is_admin: boolean;

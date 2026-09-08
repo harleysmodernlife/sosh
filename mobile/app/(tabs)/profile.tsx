@@ -224,13 +224,25 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Sösh Score */}
+        {/* Sösh Score + Streak row */}
         <View style={styles.scoreRowSmall}>
           <Text style={styles.scoreSmallLabel}>SÖSH SCORE</Text>
           <Text style={[styles.scoreSmallValue, user?.accent_color ? { color: user.accent_color } : undefined]}>
             {user?.sosh_score ?? 0}
           </Text>
         </View>
+
+        {(user?.current_streak ?? 0) > 0 && (
+          <View style={styles.streakRow}>
+            <Text style={styles.streakIcon}>🔥</Text>
+            <Text style={styles.streakText}>
+              {user?.current_streak} Pulse streak
+              {(user?.longest_streak ?? 0) > (user?.current_streak ?? 0)
+                ? ` · best: ${user?.longest_streak}`
+                : ''}
+            </Text>
+          </View>
+        )}
 
         {/* Legal */}
         <TouchableOpacity style={styles.legalBtn} onPress={() => router.push('/legal')}>
@@ -802,6 +814,9 @@ const styles = StyleSheet.create({
   scoreRowSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
   scoreSmallLabel: { fontSize: 10, fontWeight: '700', color: '#333', letterSpacing: 2 },
   scoreSmallValue: { fontSize: 16, fontWeight: '800', color: '#555' },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streakIcon: { fontSize: 16 },
+  streakText: { fontSize: 13, fontWeight: '700', color: '#e63946' },
 
   section: { gap: 12 },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: '#444', letterSpacing: 3 },

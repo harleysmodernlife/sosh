@@ -248,6 +248,16 @@ export default function UserProfileScreen() {
           </View>
         </View>
 
+        {user.current_streak > 0 && (
+          <View style={styles.streakRow}>
+            <Text style={styles.streakIcon}>🔥</Text>
+            <Text style={styles.streakText}>
+              {user.current_streak} Pulse streak
+              {user.longest_streak > user.current_streak ? ` · best: ${user.longest_streak}` : ''}
+            </Text>
+          </View>
+        )}
+
         {posts.length > 0 && !user.viewer_has_blocked && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>POSTS</Text>
@@ -437,6 +447,9 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 36, fontWeight: '900', color: '#fff' },
   statLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 2 },
   statDivider: { width: 1, backgroundColor: '#1a1a1a', marginVertical: 16 },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streakIcon: { fontSize: 16 },
+  streakText: { fontSize: 13, fontWeight: '700', color: '#e63946' },
 
   section: { gap: 12 },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: '#444', letterSpacing: 3 },

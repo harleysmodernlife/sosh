@@ -130,6 +130,36 @@ def resolve_pulse(pulse_id: str) -> None:
                     (uid, uid, uid, uid, uid),
                 )
 
+            # 6b. Compute participation streaks
+            # Get entrant IDs (submitters only, not just voters)
+            cur.execute(
+                "SELECT DISTINCT user_id::text FROM pulse_entries WHERE pulse_id = %s AND moderation_status = 'approved'",
+                (pulse_id,),
+            )
+            entrant_ids = [row[0] for row in cur.fetchall()]
+
+            if entrant_ids:
+                # Increment streak for participants; update longest_streak if exceeded
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET current_streak = current_streak + 1,
+                        longest_streak = GREATEST(longest_streak, current_streak + 1)
+                    WHERE id::text = ANY(%s)
+                    """,
+                    (entrant_ids,),
+                )
+                # Reset streak to 0 for non-participants who currently have a streak
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET current_streak = 0
+                    WHERE current_streak > 0
+                      AND id::text != ALL(%s)
+                    """,
+                    (entrant_ids,),
+                )
+
             # 7. Collect push tokens for notifications
             winner_push_token = None
             entrant_push_tokens = []

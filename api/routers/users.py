@@ -38,6 +38,8 @@ class UserProfile(BaseModel):
     trophy_count: int
     follower_count: int = 0
     following_count: int = 0
+    current_streak: int = 0
+    longest_streak: int = 0
     viewer_is_following: bool = False
     viewer_has_blocked: bool = False
     is_admin: bool = False
@@ -70,6 +72,8 @@ async def get_my_profile(
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
                    (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
+                   COALESCE(u.current_streak, 0) AS current_streak,
+                   COALESCE(u.longest_streak, 0) AS longest_streak,
                    FALSE AS viewer_is_following,
                    (EXISTS (SELECT 1 FROM user_roles WHERE user_id = u.id AND role = 'admin')) AS is_admin
             FROM users u
@@ -97,6 +101,8 @@ async def search_users(
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    0 AS follower_count,
                    0 AS following_count,
+                   COALESCE(u.current_streak, 0) AS current_streak,
+                   COALESCE(u.longest_streak, 0) AS longest_streak,
                    FALSE AS viewer_is_following,
                    FALSE AS is_admin
             FROM users u
@@ -142,6 +148,8 @@ async def get_user_profile(
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
                    (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
+                   COALESCE(u.current_streak, 0) AS current_streak,
+                   COALESCE(u.longest_streak, 0) AS longest_streak,
                    (EXISTS (SELECT 1 FROM follows WHERE follower_id = :viewer_id AND following_id = u.id)) AS viewer_is_following,
                    (EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = :viewer_id AND blocked_id = u.id)) AS viewer_has_blocked
             FROM users u
