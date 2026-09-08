@@ -18,6 +18,7 @@ import { Video, ResizeMode } from 'expo-av';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useFocusEffect } from 'expo-router';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { LEADERBOARD_POLL_MS } from '@/constants/config';
 import type { Pulse, Entry, LeaderboardEntry, ResolvedPulse } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
@@ -28,6 +29,7 @@ export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [votingInFlight, setVotingInFlight] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<(Entry & { rank: number }) | null>(null);
   const [lastResolved, setLastResolved] = useState<ResolvedPulse | null>(null);
@@ -61,6 +63,7 @@ export default function LeaderboardScreen() {
   }
 
   useFocusEffect(useCallback(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
     setLoading(true);
     load();
 
@@ -91,6 +94,8 @@ export default function LeaderboardScreen() {
       return entry ? { ...entry, rank: lb.rank, vote_count: lb.vote_count } : null;
     })
     .filter(Boolean) as (Entry & { rank: number })[];
+
+  const myRankedEntry = currentUserId ? ranked.find(e => e.user_id === currentUserId) : null;
 
   async function vote(entry: Entry) {
     if (entry.viewer_has_voted) {
@@ -202,6 +207,14 @@ export default function LeaderboardScreen() {
 
       <Text style={styles.prompt} numberOfLines={2}>"{pulse.prompt}"</Text>
 
+      {myRankedEntry && (
+        <View style={styles.myRankBanner}>
+          <Text style={styles.myRankText}>
+            YOUR RANK: #{myRankedEntry.rank}  ·  {myRankedEntry.vote_count} {myRankedEntry.vote_count === 1 ? 'vote' : 'votes'}
+          </Text>
+        </View>
+      )}
+
       {ranked.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyText}>No entries yet.{'\n'}Submit yours in the Pulse tab.</Text>
@@ -219,6 +232,7 @@ export default function LeaderboardScreen() {
               onPress={() => setSelectedEntry(item)}
               voteInFlight={votingInFlight.has(item.id)}
               canVote={pulse.status === 'voting' || pulse.status === 'active'}
+              isMe={item.user_id === currentUserId}
             />
           )}
         />
@@ -264,16 +278,18 @@ function EntryCard({
   onPress,
   voteInFlight,
   canVote,
+  isMe = false,
 }: {
   entry: Entry & { rank: number };
   onVote: () => void;
   onPress: () => void;
   voteInFlight: boolean;
   canVote: boolean;
+  isMe?: boolean;
 }) {
   const isFirst = entry.rank === 1;
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[styles.card, isFirst && styles.cardFirst]}>
+    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[styles.card, isFirst && styles.cardFirst, isMe && styles.cardMe]}>
       <View style={[styles.rank, isFirst && styles.rankFirst]}>
         <Text style={[styles.rankNum, isFirst && styles.rankNumFirst]}>
           {isFirst ? '①' : `#${entry.rank}`}
@@ -287,6 +303,7 @@ function EntryCard({
           {entry.display_name && (
             <Text style={styles.usernameHandle}>@{entry.username}</Text>
           )}
+          {isMe && <Text style={styles.youBadge}>YOU</Text>}
         </View>
         {entry.text_content ? (
           <Text style={styles.entryText}>{entry.text_content}</Text>
@@ -422,8 +439,12 @@ const styles = StyleSheet.create({
 
   list: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
 
+  myRankBanner: { marginHorizontal: 16, marginBottom: 8, backgroundColor: '#0d1a2a', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#1a3a5c' },
+  myRankText: { fontSize: 13, fontWeight: '800', color: '#5ba3e0', letterSpacing: 1 },
+
   card: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 12, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
   cardFirst: { backgroundColor: '#0f0e00', borderColor: '#2a2500' },
+  cardMe: { borderColor: '#1a3a5c', backgroundColor: '#080d14' },
   rank: { width: 48, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0a' },
   rankFirst: { backgroundColor: '#0d0b00' },
   rankNum: { fontSize: 13, fontWeight: '800', color: '#3a3a3a' },
@@ -432,6 +453,7 @@ const styles = StyleSheet.create({
   entryMeta: { gap: 1 },
   username: { fontSize: 13, color: '#ccc', fontWeight: '700' },
   usernameHandle: { fontSize: 11, color: '#444' },
+  youBadge: { fontSize: 10, fontWeight: '900', color: '#5ba3e0', letterSpacing: 1, marginTop: 2 },
   entryText: { fontSize: 16, color: '#ddd', lineHeight: 23 },
   entryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
   voteBtn: { width: 64, justifyContent: 'center', alignItems: 'center', gap: 2, borderLeftWidth: 1, borderLeftColor: '#1a1a1a' },

@@ -34,14 +34,22 @@ export default function PulseScreen() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [myEntry, setMyEntry] = useState<Entry | null>(null);
+  const [entryCount, setEntryCount] = useState<number | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadPulse() {
     try {
       const p = await api.pulses.active();
       setPulse(p);
+      if (p && p.status === 'active') {
+        const ents = await api.pulses.entries(p.id);
+        setEntryCount(ents.length);
+      } else {
+        setEntryCount(null);
+      }
     } catch {}
     finally { setLoading(false); }
   }
@@ -55,6 +63,20 @@ export default function PulseScreen() {
     setCapturedVideo(null);
     setIsRecording(false);
     setRecordingSeconds(0);
+
+    countPollRef.current = setInterval(async () => {
+      try {
+        const p = await api.pulses.active();
+        if (p && p.status === 'active') {
+          const ents = await api.pulses.entries(p.id);
+          setEntryCount(ents.length);
+        }
+      } catch {}
+    }, 30000);
+
+    return () => {
+      if (countPollRef.current) clearInterval(countPollRef.current);
+    };
   }, []));
 
   const countdown = useCountdown(
@@ -178,7 +200,12 @@ export default function PulseScreen() {
     <View style={styles.container}>
       {/* Top bar */}
       <LinearGradient colors={['#ff4444', '#cc0000']} style={styles.topBar}>
-        <Text style={styles.liveLabel}>⚡ PULSE IS LIVE</Text>
+        <View>
+          <Text style={styles.liveLabel}>⚡ PULSE IS LIVE</Text>
+          {entryCount !== null && (
+            <Text style={styles.entryCount}>{entryCount} {entryCount === 1 ? 'entry' : 'entries'} so far</Text>
+          )}
+        </View>
         {countdown && <Text style={styles.countdown}>{countdown}</Text>}
       </LinearGradient>
 
@@ -345,6 +372,7 @@ const styles = StyleSheet.create({
 
   topBar: { paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   liveLabel: { fontSize: 13, fontWeight: '800', color: '#fff', letterSpacing: 2 },
+  entryCount: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 3, fontWeight: '600' },
   countdown: { fontSize: 22, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] },
 
   promptContainer: { padding: 20, paddingTop: 24 },
