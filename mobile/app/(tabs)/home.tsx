@@ -29,6 +29,7 @@ import type { Pulse, Post, FeedEntry } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 import { CommentsModal } from '@/components/CommentsModal';
 import { FeedSkeleton } from '@/components/Skeleton';
+import { MentionText } from '@/components/MentionText';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PAGE = 20;
@@ -527,7 +528,7 @@ function PostCard({
         ) : post.text_content ? (
           <Pressable onPress={handleContentTap}>
             <View style={styles.cardTextBox}>
-              <Text style={styles.cardText}>{post.text_content}</Text>
+              <MentionText text={post.text_content} style={styles.cardText} />
             </View>
           </Pressable>
         ) : null}

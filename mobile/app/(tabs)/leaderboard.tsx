@@ -21,7 +21,7 @@ import { useFocusEffect } from 'expo-router';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { LEADERBOARD_POLL_MS } from '@/constants/config';
-import type { Pulse, Entry, LeaderboardEntry, ResolvedPulse } from '@/lib/types';
+import type { Pulse, Entry, LeaderboardEntry, ResolvedPulse, EntryReactionMap } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
 export default function LeaderboardScreen() {
@@ -338,6 +338,60 @@ function EntryCard({
   );
 }
 
+const REACTION_EMOJIS = ['❤️', '🔥', '👏', '😂'];
+
+function ReactionBar({ entryId }: { entryId: string }) {
+  const [reactions, setReactions] = useState<EntryReactionMap>({});
+  const [inFlight, setInFlight] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.entries.reactions(entryId).then(setReactions).catch(() => {});
+  }, [entryId]);
+
+  async function toggle(emoji: string) {
+    if (inFlight) return;
+    setInFlight(emoji);
+    const prev = reactions[emoji] ?? { count: 0, viewer_reacted: false };
+    // Optimistic update
+    setReactions(r => ({
+      ...r,
+      [emoji]: { count: prev.viewer_reacted ? prev.count - 1 : prev.count + 1, viewer_reacted: !prev.viewer_reacted },
+    }));
+    try {
+      await api.entries.react(entryId, emoji);
+    } catch {
+      // Revert
+      setReactions(r => ({ ...r, [emoji]: prev }));
+    } finally {
+      setInFlight(null);
+    }
+  }
+
+  return (
+    <View style={styles.reactionBar}>
+      {REACTION_EMOJIS.map(em => {
+        const data = reactions[em] ?? { count: 0, viewer_reacted: false };
+        return (
+          <TouchableOpacity
+            key={em}
+            style={[styles.reactionBtn, data.viewer_reacted && styles.reactionBtnActive]}
+            onPress={() => toggle(em)}
+            disabled={!!inFlight}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.reactionEmoji}>{em}</Text>
+            {data.count > 0 && (
+              <Text style={[styles.reactionCount, data.viewer_reacted && styles.reactionCountActive]}>
+                {data.count}
+              </Text>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 function EntryModal({
   entry,
   onClose,
@@ -411,6 +465,8 @@ function EntryModal({
               <Text style={styles.modalText}>{entry.text_content}</Text>
             </View>
           ) : null}
+
+          <ReactionBar entryId={entry.id} />
 
           <View style={styles.modalMeta}>
             <Text style={styles.modalVoteCount}>{entry.vote_count} votes</Text>
@@ -503,4 +559,15 @@ const styles = StyleSheet.create({
   modalVoteBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
   modalVoteBtnText: { color: '#666', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   modalVoteBtnTextActive: { color: '#000' },
+
+  reactionBar: { flexDirection: 'row', gap: 10 },
+  reactionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1, borderColor: '#1e1e1e', backgroundColor: '#0a0a0a',
+  },
+  reactionBtnActive: { borderColor: '#333', backgroundColor: '#141414' },
+  reactionEmoji: { fontSize: 18 },
+  reactionCount: { fontSize: 13, color: '#555', fontWeight: '700' },
+  reactionCountActive: { color: '#aaa' },
 });

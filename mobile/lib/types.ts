@@ -147,11 +147,16 @@ export interface Comment {
   post_id: string;
   user_id: string;
   body: string;
+  parent_id: string | null;
   created_at: string;
   username: string;
   display_name: string | null;
   avatar_url: string | null;
   accent_color: string | null;
+}
+
+export interface EntryReactionMap {
+  [emoji: string]: { count: number; viewer_reacted: boolean };
 }
 
 export interface Notification {

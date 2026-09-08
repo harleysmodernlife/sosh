@@ -39,6 +39,13 @@ class EntryResponse(BaseModel):
     created_at: str
 
 
+REACTION_EMOJIS = {"❤️", "🔥", "👏", "😂"}
+
+
+class ReactRequest(BaseModel):
+    emoji: str
+
+
 class ReportRequest(BaseModel):
     reason: str = Field(..., pattern="^(spam|offensive|csam|other)$")
     details: str | None = Field(None, max_length=500)
@@ -124,6 +131,56 @@ async def submit_entry(
         {"id": entry_id},
     )
     return dict(row.mappings().first())
+
+
+@router.get("/{entry_id}/reactions")
+async def get_reactions(
+    entry_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return reaction counts for an entry, including whether the viewer reacted."""
+    rows = await db.execute(
+        text("""
+            SELECT emoji, COUNT(*) AS count,
+                   BOOL_OR(user_id = :uid) AS viewer_reacted
+            FROM entry_reactions
+            WHERE entry_id = :eid
+            GROUP BY emoji
+        """),
+        {"eid": entry_id, "uid": current_user.user_id},
+    )
+    counts = {r["emoji"]: {"count": int(r["count"]), "viewer_reacted": bool(r["viewer_reacted"])}
+              for r in rows.mappings().all()}
+    return {em: counts.get(em, {"count": 0, "viewer_reacted": False}) for em in REACTION_EMOJIS}
+
+
+@router.post("/{entry_id}/react", status_code=status.HTTP_204_NO_CONTENT)
+async def toggle_reaction(
+    entry_id: UUID,
+    body: ReactRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle an emoji reaction on an entry (add if absent, remove if present)."""
+    if body.emoji not in REACTION_EMOJIS:
+        raise HTTPException(status_code=400, detail="Invalid emoji")
+
+    result = await db.execute(
+        text("""
+            INSERT INTO entry_reactions (entry_id, user_id, emoji)
+            VALUES (:eid, :uid, :emoji)
+            ON CONFLICT DO NOTHING
+        """),
+        {"eid": entry_id, "uid": current_user.user_id, "emoji": body.emoji},
+    )
+    if result.rowcount == 0:
+        # Already reacted → remove
+        await db.execute(
+            text("DELETE FROM entry_reactions WHERE entry_id = :eid AND user_id = :uid AND emoji = :emoji"),
+            {"eid": entry_id, "uid": current_user.user_id, "emoji": body.emoji},
+        )
+    await db.commit()
 
 
 @router.post("/{entry_id}/reports", status_code=status.HTTP_204_NO_CONTENT)

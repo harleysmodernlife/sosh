@@ -15,10 +15,43 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import re
+
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
 from services.push import send_like_notification, send_comment_notification
 from services.notif import create_notification
+
+
+def _extract_mentions(text: str | None) -> list[str]:
+    if not text:
+        return []
+    return list({m.lower() for m in re.findall(r'@([a-zA-Z0-9_]+)', text)})
+
+
+async def _fire_mention_notifications(
+    db: AsyncSession,
+    text_content: str | None,
+    actor_id: str,
+    actor_name: str,
+    post_id: str,
+) -> None:
+    usernames = _extract_mentions(text_content)
+    if not usernames:
+        return
+    rows = await db.execute(
+        text("SELECT id::text FROM users WHERE LOWER(username) = ANY(:names) AND id::text != :actor"),
+        {"names": usernames, "actor": actor_id},
+    )
+    for row in rows.mappings().all():
+        await create_notification(
+            db,
+            user_id=row["id"],
+            type="mention",
+            body=f"{actor_name} mentioned you",
+            actor_id=actor_id,
+            post_id=post_id,
+        )
 
 router = APIRouter()
 
@@ -70,7 +103,16 @@ async def create_post(
         """),
         {"id": post_id},
     )
-    return dict(row.mappings().first())
+    post = dict(row.mappings().first())
+
+    # Fire @mention notifications (non-fatal)
+    mention_text = ' '.join(filter(None, [body.text_content, body.caption]))
+    actor_name = post.get("display_name") or f"@{post.get('username')}"
+    await _fire_mention_notifications(db, mention_text, current_user.user_id, actor_name, post_id)
+    if mention_text:
+        await db.commit()
+
+    return post
 
 
 @router.get("/search")
@@ -428,6 +470,7 @@ async def unbookmark_post(
 
 _COMMENT_SELECT = """
     SELECT c.id::text, c.post_id::text, c.user_id::text, c.body, c.created_at::text,
+           c.parent_id::text,
            u.username, u.display_name, u.avatar_url, u.accent_color
     FROM post_comments c
     JOIN users u ON u.id = c.user_id
@@ -436,6 +479,7 @@ _COMMENT_SELECT = """
 
 class CreateCommentRequest(BaseModel):
     body: str = Field(..., min_length=1, max_length=300)
+    parent_id: str | None = None
 
 
 @router.get("/{post_id}/comments")
@@ -477,8 +521,8 @@ async def create_comment(
 
     comment_id = str(uuid4())
     await db.execute(
-        text("INSERT INTO post_comments (id, post_id, user_id, body) VALUES (:id, :post_id, :uid, :body)"),
-        {"id": comment_id, "post_id": post_id, "uid": current_user.user_id, "body": body.body},
+        text("INSERT INTO post_comments (id, post_id, user_id, body, parent_id) VALUES (:id, :post_id, :uid, :body, :parent_id)"),
+        {"id": comment_id, "post_id": post_id, "uid": current_user.user_id, "body": body.body, "parent_id": body.parent_id},
     )
     await db.execute(
         text("UPDATE posts SET comment_count = comment_count + 1 WHERE id = :id"),
@@ -492,8 +536,8 @@ async def create_comment(
     )
     comment = dict(row.mappings().first())
 
-    # Notify author (skip self-comments)
-    if post_info["author_id"] != current_user.user_id:
+    # Notify post author (skip self-comments and replies)
+    if post_info["author_id"] != current_user.user_id and not body.parent_id:
         await create_notification(
             db,
             user_id=post_info["author_id"],
@@ -509,6 +553,10 @@ async def create_comment(
                 post_info["commenter_name"],
                 str(post_id),
             )
+
+    # Fire @mention notifications in comment body
+    await _fire_mention_notifications(db, body.body, current_user.user_id, post_info["commenter_name"], str(post_id))
+    await db.commit()
 
     return comment
 

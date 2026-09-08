@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import { api } from '@/lib/api';
 import type { Comment } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { MentionText } from './MentionText';
 
 function formatTimeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -26,6 +27,28 @@ function formatTimeAgo(iso: string) {
   const h = Math.floor(mins / 60);
   if (h < 24) return `${h}h`;
   return `${Math.floor(h / 24)}d`;
+}
+
+type ThreadItem = { comment: Comment; isReply: boolean };
+
+function buildThreadedList(comments: Comment[]): ThreadItem[] {
+  const roots = comments.filter(c => !c.parent_id);
+  const repliesByParent = new Map<string, Comment[]>();
+  for (const c of comments) {
+    if (c.parent_id) {
+      const arr = repliesByParent.get(c.parent_id) ?? [];
+      arr.push(c);
+      repliesByParent.set(c.parent_id, arr);
+    }
+  }
+  const result: ThreadItem[] = [];
+  for (const root of roots) {
+    result.push({ comment: root, isReply: false });
+    for (const reply of (repliesByParent.get(root.id) ?? [])) {
+      result.push({ comment: reply, isReply: true });
+    }
+  }
+  return result;
 }
 
 export function CommentsModal({
@@ -44,7 +67,9 @@ export function CommentsModal({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
@@ -64,8 +89,10 @@ export function CommentsModal({
     if (!text || sending) return;
     setSending(true);
     setDraft('');
+    const parentId = replyingTo?.id;
+    setReplyingTo(null);
     try {
-      const comment = await api.comments.create(postId, text);
+      const comment = await api.comments.create(postId, text, parentId);
       setComments(prev => [...prev, comment]);
       onCountChange?.(1);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -85,7 +112,8 @@ export function CommentsModal({
         onPress: async () => {
           try {
             await api.comments.delete(postId, comment.id);
-            setComments(prev => prev.filter(c => c.id !== comment.id));
+            // Remove comment and its replies
+            setComments(prev => prev.filter(c => c.id !== comment.id && c.parent_id !== comment.id));
             onCountChange?.(-1);
           } catch (err: any) {
             Alert.alert('Error', err.message);
@@ -94,6 +122,13 @@ export function CommentsModal({
       },
     ]);
   }
+
+  function startReply(comment: Comment) {
+    setReplyingTo(comment);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  const threaded = buildThreadedList(comments);
 
   return (
     <Modal
@@ -119,14 +154,16 @@ export function CommentsModal({
         ) : (
           <FlatList
             ref={listRef}
-            data={comments}
-            keyExtractor={c => c.id}
+            data={threaded}
+            keyExtractor={item => item.comment.id}
             renderItem={({ item }) => (
               <CommentRow
-                comment={item}
-                isOwn={item.user_id === currentUserId}
-                onDelete={() => deleteComment(item)}
-                onUserPress={() => { onClose(); router.push(`/user/${item.user_id}`); }}
+                comment={item.comment}
+                isReply={item.isReply}
+                isOwn={item.comment.user_id === currentUserId}
+                onDelete={() => deleteComment(item.comment)}
+                onUserPress={() => { onClose(); router.push(`/user/${item.comment.user_id}`); }}
+                onReply={item.isReply ? undefined : () => startReply(item.comment)}
               />
             )}
             ListEmptyComponent={
@@ -139,12 +176,24 @@ export function CommentsModal({
           />
         )}
 
+        {replyingTo && (
+          <View style={styles.replyBanner}>
+            <Text style={styles.replyBannerText}>
+              Replying to {replyingTo.display_name ?? `@${replyingTo.username}`}
+            </Text>
+            <TouchableOpacity onPress={() => setReplyingTo(null)}>
+              <Text style={styles.replyBannerCancel}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.inputRow}>
           <TextInput
+            ref={inputRef}
             style={styles.input}
             value={draft}
             onChangeText={t => setDraft(t.slice(0, 300))}
-            placeholder="Add a comment..."
+            placeholder={replyingTo ? `Reply to ${replyingTo.display_name ?? `@${replyingTo.username}`}...` : 'Add a comment...'}
             placeholderTextColor="#444"
             multiline
             maxLength={300}
@@ -169,23 +218,28 @@ export function CommentsModal({
 
 function CommentRow({
   comment,
+  isReply,
   isOwn,
   onDelete,
   onUserPress,
+  onReply,
 }: {
   comment: Comment;
+  isReply: boolean;
   isOwn: boolean;
   onDelete: () => void;
   onUserPress: () => void;
+  onReply?: () => void;
 }) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isReply && styles.rowReply]}>
+      {isReply && <View style={styles.replyLine} />}
       <TouchableOpacity onPress={onUserPress}>
-        <View style={[styles.avatar, comment.accent_color ? { borderColor: comment.accent_color } : undefined]}>
+        <View style={[styles.avatar, isReply && styles.avatarSmall, comment.accent_color ? { borderColor: comment.accent_color } : undefined]}>
           {comment.avatar_url ? (
-            <Image source={{ uri: comment.avatar_url }} style={styles.avatarImg} />
+            <Image source={{ uri: comment.avatar_url }} style={isReply ? styles.avatarImgSmall : styles.avatarImg} />
           ) : (
-            <Text style={[styles.avatarLetter, comment.accent_color ? { color: comment.accent_color } : undefined]}>
+            <Text style={[styles.avatarLetter, isReply && styles.avatarLetterSmall, comment.accent_color ? { color: comment.accent_color } : undefined]}>
               {(comment.username ?? '?')[0].toUpperCase()}
             </Text>
           )}
@@ -198,7 +252,12 @@ function CommentRow({
           </TouchableOpacity>
           <Text style={styles.time}>{formatTimeAgo(comment.created_at)}</Text>
         </View>
-        <Text style={styles.body}>{comment.body}</Text>
+        <MentionText text={comment.body} style={styles.body} />
+        {onReply && (
+          <TouchableOpacity onPress={onReply} style={styles.replyBtn}>
+            <Text style={styles.replyBtnText}>Reply</Text>
+          </TouchableOpacity>
+        )}
       </View>
       {isOwn && (
         <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
@@ -218,25 +277,44 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700', color: '#fff' },
   close: { fontSize: 15, fontWeight: '600', color: '#555' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { padding: 16, gap: 16, paddingBottom: 8 },
+  list: { padding: 16, gap: 12, paddingBottom: 8 },
   empty: { paddingTop: 40, alignItems: 'center' },
   emptyText: { color: '#333', fontSize: 14 },
 
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  rowReply: { paddingLeft: 24 },
+  replyLine: { position: 'absolute', left: 16, top: 0, bottom: 0, width: 1, backgroundColor: '#1c1c1c' },
+
   avatar: {
     width: 34, height: 34, borderRadius: 17, backgroundColor: '#1a1a1a',
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0,
   },
+  avatarSmall: { width: 26, height: 26, borderRadius: 13 },
   avatarImg: { width: 34, height: 34, borderRadius: 17 },
+  avatarImgSmall: { width: 26, height: 26, borderRadius: 13 },
   avatarLetter: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  avatarLetterSmall: { fontSize: 11 },
+
   bubble: { flex: 1, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 12, gap: 4 },
   bubbleTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 13, fontWeight: '700', color: '#fff' },
   time: { fontSize: 11, color: '#444' },
   body: { fontSize: 14, color: '#ccc', lineHeight: 20 },
+
+  replyBtn: { marginTop: 4 },
+  replyBtnText: { fontSize: 12, color: '#444', fontWeight: '600' },
+
   deleteBtn: { paddingTop: 8, paddingLeft: 4 },
   deleteText: { fontSize: 14, color: '#333' },
+
+  replyBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: '#111', backgroundColor: '#0a0a0a',
+  },
+  replyBannerText: { fontSize: 12, color: '#555' },
+  replyBannerCancel: { fontSize: 14, color: '#333', paddingLeft: 12 },
 
   inputRow: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-end',

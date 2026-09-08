@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, UserSummary, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment, Notification, Conversation, DirectMessage } from './types';
+import type { User, UserSummary, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment, Notification, Conversation, DirectMessage, EntryReactionMap } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -110,6 +110,12 @@ export const api = {
       media_key?: string;
     }): Promise<Entry> =>
       apiFetch('/entries', { method: 'POST', body: JSON.stringify(data) }),
+
+    reactions: (entryId: string): Promise<EntryReactionMap> =>
+      apiFetch(`/entries/${entryId}/reactions`),
+
+    react: (entryId: string, emoji: string): Promise<void> =>
+      apiFetch(`/entries/${entryId}/react`, { method: 'POST', body: JSON.stringify({ emoji }) }),
   },
 
   // ─── Votes ────────────────────────────────────────────────────────────────
@@ -211,8 +217,8 @@ export const api = {
     list: (postId: string): Promise<Comment[]> =>
       apiFetch(`/posts/${postId}/comments`),
 
-    create: (postId: string, body: string): Promise<Comment> =>
-      apiFetch(`/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
+    create: (postId: string, body: string, parentId?: string): Promise<Comment> =>
+      apiFetch(`/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ body, parent_id: parentId }) }),
 
     delete: (postId: string, commentId: string): Promise<void> =>
       apiFetch(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
