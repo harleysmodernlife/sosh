@@ -8,6 +8,7 @@ import {
   Image,
   ScrollView,
   Alert,
+  Share,
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -56,6 +57,18 @@ export default function PostScreen() {
       .catch(() => Alert.alert('Error', 'Could not load post.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  async function handleShare() {
+    if (!post) return;
+    const deepLink = `sosh://post/${post.id}`;
+    const lines: string[] = [`@${post.username} on Sösh`];
+    if (post.text_content) lines.push(post.text_content);
+    if (post.caption) lines.push(post.caption);
+    lines.push(deepLink);
+    try {
+      await Share.share({ message: lines.join('\n\n') });
+    } catch {}
+  }
 
   async function toggleLike() {
     if (!post || inFlight) return;
@@ -180,6 +193,9 @@ export default function PostScreen() {
             <Text style={styles.actionIcon}>💬</Text>
             <Text style={styles.actionCount}>{commentCount}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShare} activeOpacity={0.7}>
+            <Text style={styles.shareIcon}>↑</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -226,8 +242,10 @@ const styles = StyleSheet.create({
   textContent: { fontSize: 22, color: '#fff', lineHeight: 30, fontWeight: '500' },
   caption: { fontSize: 15, color: '#888', paddingHorizontal: 20, lineHeight: 22 },
 
-  actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 20, paddingTop: 4 },
+  actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 20, paddingTop: 4, alignItems: 'center' },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  shareBtn: { marginLeft: 'auto' },
+  shareIcon: { fontSize: 20, color: '#444', fontWeight: '700' },
   actionIcon: { fontSize: 22, color: '#333' },
   actionIconLiked: { color: '#e63946' },
   actionCount: { fontSize: 14, fontWeight: '700', color: '#333' },

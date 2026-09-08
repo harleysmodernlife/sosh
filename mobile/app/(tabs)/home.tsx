@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Share,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -332,6 +333,18 @@ function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [inFlight, setInFlight] = useState(false);
 
+  async function handleShare() {
+    const deepLink = `sosh://post/${post.id}`;
+    const lines: string[] = [];
+    if (post.display_name ?? post.username) lines.push(`@${post.username} on Sösh`);
+    if (post.text_content) lines.push(post.text_content);
+    if (post.caption) lines.push(post.caption);
+    lines.push(deepLink);
+    try {
+      await Share.share({ message: lines.join('\n\n') });
+    } catch {}
+  }
+
   async function toggleLike() {
     if (inFlight) return;
     setInFlight(true);
@@ -427,6 +440,9 @@ function PostCard({
         <TouchableOpacity style={styles.likeBtn} onPress={() => setShowComments(true)} activeOpacity={0.7}>
           <Text style={styles.commentIcon}>💬</Text>
           <Text style={styles.likeCount}>{commentCount}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
+          <Text style={styles.shareIcon}>↑</Text>
         </TouchableOpacity>
       </View>
 
@@ -649,8 +665,10 @@ const styles = StyleSheet.create({
   cardTextBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
   cardText: { fontSize: 20, color: '#fff', lineHeight: 28, fontWeight: '500' },
   cardCaption: { fontSize: 14, color: '#888', paddingHorizontal: 16, lineHeight: 20 },
-  cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4 },
+  cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, gap: 20 },
   likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shareBtn: { marginLeft: 'auto' },
+  shareIcon: { fontSize: 18, color: '#444', fontWeight: '700' },
   likeIcon: { fontSize: 20, color: '#333' },
   likeIconActive: { color: '#e63946' },
   likeCount: { fontSize: 13, fontWeight: '700', color: '#333' },
