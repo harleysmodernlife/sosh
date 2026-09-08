@@ -12,6 +12,7 @@ import {
   ScrollView,
   Dimensions,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 
@@ -362,6 +363,17 @@ function EntryModal({
     } catch {}
   }
 
+  async function handleShare() {
+    if (!entry) return;
+    const rankStr = entry.rank === 1 ? '🏆 #1 on Sösh' : `#${entry.rank} on Sösh`;
+    const lines = [rankStr];
+    if (entry.text_content) lines.push(entry.text_content);
+    lines.push(`sosh://pulse/${entry.pulse_id}`);
+    try {
+      await Share.share({ message: lines.join('\n\n') });
+    } catch {}
+  }
+
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.modal}>
@@ -402,6 +414,9 @@ function EntryModal({
 
           <View style={styles.modalMeta}>
             <Text style={styles.modalVoteCount}>{entry.vote_count} votes</Text>
+            <TouchableOpacity onPress={handleShare} style={styles.modalShareBtn}>
+              <Text style={styles.modalShareText}>Share ↑</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -478,8 +493,10 @@ const styles = StyleSheet.create({
   modalImage: { aspectRatio: 4 / 3, borderRadius: 12 },
   modalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   modalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
-  modalMeta: { flexDirection: 'row', gap: 16 },
+  modalMeta: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   modalVoteCount: { fontSize: 13, color: '#444', fontWeight: '600' },
+  modalShareBtn: { marginLeft: 'auto' },
+  modalShareText: { fontSize: 13, color: '#555', fontWeight: '700' },
   modalFlag: { color: '#555', fontSize: 13, fontWeight: '600', width: 56, textAlign: 'right' },
   modalFlagDone: { color: '#333' },
   modalVoteBtn: { margin: 16, borderRadius: 12, paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
