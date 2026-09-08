@@ -48,6 +48,8 @@ export const api = {
 
     search: (q: string): Promise<User[]> => apiFetch(`/users/search?q=${encodeURIComponent(q)}`, {}, false),
 
+    suggested: (): Promise<User[]> => apiFetch('/users/suggested'),
+
     followers: (userId: string): Promise<UserSummary[]> =>
       apiFetch(`/users/${userId}/followers`, {}, false),
 

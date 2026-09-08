@@ -116,6 +116,38 @@ async def search_users(
     return [dict(r) for r in rows.mappings().all()]
 
 
+@router.get("/suggested", response_model=list[UserProfile])
+async def suggested_users(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT u.id, u.username, u.display_name, u.bio, u.city, u.country_code, u.avatar_url,
+                   u.accent_color,
+                   COALESCE(s.score, 0) AS sosh_score,
+                   (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
+                   (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
+                   (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
+                   COALESCE(u.current_streak, 0) AS current_streak,
+                   COALESCE(u.longest_streak, 0) AS longest_streak,
+                   FALSE AS viewer_is_following,
+                   FALSE AS viewer_has_blocked,
+                   FALSE AS is_admin
+            FROM users u
+            LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
+            WHERE u.id != :me
+              AND u.id NOT IN (SELECT following_id FROM follows WHERE follower_id = :me)
+              AND u.id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = :me)
+              AND u.username IS NOT NULL
+            ORDER BY follower_count DESC, COALESCE(s.score, 0) DESC
+            LIMIT 20
+        """),
+        {"me": str(current_user.user_id)},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
 @router.get("/{user_id}", response_model=UserProfile)
 async def get_user_profile(
     user_id: UUID,

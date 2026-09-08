@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,12 @@ export default function SearchScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [suggested, setSuggested] = useState<User[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api.users.suggested().then(setSuggested).catch(() => {});
+  }, []);
 
   const runSearch = useCallback((q: string, activeTab: Tab) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -108,11 +113,14 @@ export default function SearchScreen() {
 
       {tab === 'people' ? (
         <FlatList
-          data={users}
+          data={query.trim() ? users : suggested}
           keyExtractor={u => u.id}
           renderItem={({ item }) => <UserRow user={item} />}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.list}
+          ListHeaderComponent={!query.trim() && suggested.length > 0
+            ? <Text style={styles.sectionHeader}>WHO TO FOLLOW</Text>
+            : null}
           ListEmptyComponent={<EmptyState noResults={noResults} query={query} tab={tab} />}
           showsVerticalScrollIndicator={false}
         />
@@ -264,6 +272,8 @@ const styles = StyleSheet.create({
   postStats: { flexDirection: 'row', gap: 12 },
   postStat: { fontSize: 12, color: '#333', fontWeight: '600' },
   postThumb: { width: 54, height: 54, borderRadius: 8, flexShrink: 0 },
+
+  sectionHeader: { fontSize: 11, fontWeight: '800', color: '#333', letterSpacing: 2, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
 
   empty: { paddingTop: 60, alignItems: 'center' },
   emptyText: { color: '#333', fontSize: 14 },
