@@ -149,6 +149,9 @@ export default function ProfileScreen() {
             {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.notifBtn} onPress={() => router.push('/dm')}>
+              <Text style={styles.notifIcon}>✉</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.notifBtn} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
               <Text style={styles.notifIcon}>🔔</Text>
               {unreadCount > 0 && (

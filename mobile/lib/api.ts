@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { API_BASE_URL } from '@/constants/config';
-import type { User, UserSummary, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment, Notification } from './types';
+import type { User, UserSummary, Pulse, Entry, LeaderboardEntry, Trophy, ResolvedPulse, MosaicEntry, MyEntry, Post, Comment, Notification, Conversation, DirectMessage } from './types';
 
 async function getToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -204,6 +204,25 @@ export const api = {
     list: (): Promise<Notification[]> => apiFetch('/notifications'),
     unreadCount: (): Promise<{ count: number }> => apiFetch('/notifications/unread-count'),
     markAllRead: (): Promise<void> => apiFetch('/notifications/read', { method: 'POST' }),
+  },
+
+  // ─── DMs ──────────────────────────────────────────────────────────────────
+
+  dm: {
+    conversations: (): Promise<Conversation[]> =>
+      apiFetch('/dm/conversations'),
+
+    startOrGet: (userId: string): Promise<{ conversation_id: string }> =>
+      apiFetch('/dm/conversations', { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+
+    messages: (conversationId: string, offset = 0, limit = 50): Promise<DirectMessage[]> =>
+      apiFetch(`/dm/conversations/${conversationId}/messages?offset=${offset}&limit=${limit}`),
+
+    send: (conversationId: string, body: string): Promise<DirectMessage> =>
+      apiFetch(`/dm/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
+
+    markRead: (conversationId: string): Promise<void> =>
+      apiFetch(`/dm/conversations/${conversationId}/read`, { method: 'POST' }),
   },
 
   // ─── Reports ──────────────────────────────────────────────────────────────

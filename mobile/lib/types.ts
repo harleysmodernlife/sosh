@@ -162,6 +162,33 @@ export interface Notification {
   actor_accent_color: string | null;
 }
 
+export interface Conversation {
+  conversation_id: string;
+  created_at: string;
+  other_user_id: string;
+  other_username: string | null;
+  other_display_name: string | null;
+  other_avatar_url: string | null;
+  other_accent_color: string | null;
+  last_message_body: string | null;
+  last_message_sender_id: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+  sender_username: string | null;
+  sender_display_name: string | null;
+  sender_avatar_url: string | null;
+  sender_accent_color: string | null;
+}
+
 export interface Trophy {
   id: string;
   pulse_id: string;

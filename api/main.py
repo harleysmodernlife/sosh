@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import admin, entries, feed, invites, media, notifications, posts, pulses, reports, trophies, users, votes
+from routers import admin, dm, entries, feed, invites, media, notifications, posts, pulses, reports, trophies, users, votes
 
 
 @asynccontextmanager
@@ -42,6 +42,7 @@ app.include_router(reports.router, prefix="/reports", tags=["reports"])
 app.include_router(feed.router, prefix="/feed", tags=["feed"])
 app.include_router(posts.router, prefix="/posts", tags=["posts"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+app.include_router(dm.router, prefix="/dm", tags=["dm"])
 app.include_router(invites.router, tags=["invites"])
 
 

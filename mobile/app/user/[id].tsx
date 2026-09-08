@@ -174,6 +174,20 @@ export default function UserProfileScreen() {
                 <Text style={styles.blockedBtnText}>Blocked</Text>
               </TouchableOpacity>
             )}
+            {!user.viewer_has_blocked && (
+              <TouchableOpacity
+                style={styles.msgBtn}
+                onPress={async () => {
+                  try {
+                    const { conversation_id } = await api.dm.startOrGet(user.id);
+                    router.push(`/dm/${conversation_id}`);
+                  } catch {}
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.msgBtnText}>✉</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.moreBtn}
               onPress={() => Alert.alert('', '', [
@@ -382,7 +396,9 @@ const styles = StyleSheet.create({
   displayName: { fontSize: 14, color: '#666' },
   location: { fontSize: 13, color: '#444' },
   profileActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  followBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  followBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  msgBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center' },
+  msgBtnText: { fontSize: 18, color: '#555' },
   blockedBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#333', backgroundColor: 'transparent' },
   blockedBtnText: { fontSize: 14, fontWeight: '700', color: '#555' },
   blockedNotice: { fontSize: 13, color: '#444', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },
