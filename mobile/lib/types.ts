@@ -12,6 +12,7 @@ export interface User {
   follower_count: number;
   following_count: number;
   viewer_is_following: boolean;
+  viewer_has_blocked: boolean;
   is_admin: boolean;
 }
 

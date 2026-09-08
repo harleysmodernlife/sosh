@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
   Image,
   Dimensions,
   Modal,
@@ -27,6 +28,7 @@ export default function UserProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [followInFlight, setFollowInFlight] = useState(false);
+  const [blockInFlight, setBlockInFlight] = useState(false);
   const [followList, setFollowList] = useState<{ mode: 'followers' | 'following'; users: UserSummary[] } | null>(null);
 
   useEffect(() => {
@@ -75,6 +77,41 @@ export default function UserProfileScreen() {
     }
   }
 
+  async function toggleBlock() {
+    if (!user || blockInFlight) return;
+    const wasBlocked = user.viewer_has_blocked;
+    if (!wasBlocked) {
+      Alert.alert(
+        `Block @${user.username}?`,
+        'They won\'t be able to follow you, and their posts won\'t appear in your feed.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Block', style: 'destructive', onPress: async () => {
+            setBlockInFlight(true);
+            try {
+              await api.users.block(id);
+              setUser(u => u ? { ...u, viewer_has_blocked: true, viewer_is_following: false } : u);
+            } catch (e: any) {
+              Alert.alert('Error', e.message);
+            } finally {
+              setBlockInFlight(false);
+            }
+          }},
+        ],
+      );
+    } else {
+      setBlockInFlight(true);
+      try {
+        await api.users.unblock(id);
+        setUser(u => u ? { ...u, viewer_has_blocked: false } : u);
+      } catch (e: any) {
+        Alert.alert('Error', e.message);
+      } finally {
+        setBlockInFlight(false);
+      }
+    }
+  }
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
   }
@@ -115,24 +152,34 @@ export default function UserProfileScreen() {
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
 
           <View style={styles.profileActions}>
-            <TouchableOpacity
-              style={[
-                styles.followBtn,
-                user.viewer_is_following && styles.followBtnActive,
-                !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
-                user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
-              ]}
-              onPress={toggleFollow}
-              disabled={followInFlight}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
-                {user.viewer_is_following ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
+            {!user.viewer_has_blocked && (
+              <TouchableOpacity
+                style={[
+                  styles.followBtn,
+                  user.viewer_is_following && styles.followBtnActive,
+                  !user.viewer_is_following && user.accent_color ? { borderColor: user.accent_color } : undefined,
+                  user.viewer_is_following && user.accent_color ? { backgroundColor: user.accent_color, borderColor: user.accent_color } : undefined,
+                ]}
+                onPress={toggleFollow}
+                disabled={followInFlight}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.followBtnText, user.viewer_is_following && styles.followBtnTextActive]}>
+                  {user.viewer_is_following ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {user.viewer_has_blocked && (
+              <TouchableOpacity style={styles.blockedBtn} onPress={toggleBlock} disabled={blockInFlight} activeOpacity={0.8}>
+                <Text style={styles.blockedBtnText}>Blocked</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.moreBtn}
               onPress={() => Alert.alert('', '', [
+                !user.viewer_has_blocked
+                  ? { text: `Block @${user.username}`, style: 'destructive', onPress: toggleBlock }
+                  : { text: `Unblock @${user.username}`, onPress: toggleBlock },
                 { text: 'Report user', style: 'destructive', onPress: () =>
                   Alert.alert('Report this user?', 'We\'ll review their account.', [
                     { text: 'Cancel', style: 'cancel' },
@@ -148,6 +195,9 @@ export default function UserProfileScreen() {
               <Text style={styles.moreBtnText}>···</Text>
             </TouchableOpacity>
           </View>
+          {user.viewer_has_blocked && (
+            <Text style={styles.blockedNotice}>You've blocked this user. Their posts are hidden.</Text>
+          )}
         </View>
 
         <View style={styles.scoreRow}>
@@ -173,7 +223,7 @@ export default function UserProfileScreen() {
           </View>
         </View>
 
-        {posts.length > 0 && (
+        {posts.length > 0 && !user.viewer_has_blocked && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>POSTS</Text>
             <View style={styles.postsGrid}>
@@ -333,6 +383,9 @@ const styles = StyleSheet.create({
   location: { fontSize: 13, color: '#444' },
   profileActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   followBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#fff', backgroundColor: 'transparent' },
+  blockedBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: '#333', backgroundColor: 'transparent' },
+  blockedBtnText: { fontSize: 14, fontWeight: '700', color: '#555' },
+  blockedNotice: { fontSize: 13, color: '#444', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },
   moreBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center' },
   moreBtnText: { fontSize: 16, color: '#555', letterSpacing: 2 },
   followBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },

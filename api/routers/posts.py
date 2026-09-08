@@ -82,11 +82,11 @@ async def get_post_feed(
     db: AsyncSession = Depends(get_db),
 ):
     """Home feed — global (foryou) or following-only posts, newest first."""
-    where = (
-        "WHERE p.user_id IN (SELECT following_id FROM follows WHERE follower_id = :viewer_id) OR p.user_id = :viewer_id"
-        if mode == "following"
-        else ""
-    )
+    block_filter = "AND p.user_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = :viewer_id)"
+    if mode == "following":
+        where = f"WHERE (p.user_id IN (SELECT following_id FROM follows WHERE follower_id = :viewer_id) OR p.user_id = :viewer_id) {block_filter}"
+    else:
+        where = f"WHERE TRUE {block_filter}"
     rows = await db.execute(
         text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,

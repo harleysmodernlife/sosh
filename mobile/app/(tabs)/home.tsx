@@ -404,6 +404,23 @@ function PostCard({
               ]);
             } else {
               Alert.alert('', '', [
+                { text: `Block @${post.username}`, style: 'destructive', onPress: () =>
+                  Alert.alert(
+                    `Block @${post.username}?`,
+                    "Their posts won't appear in your feed.",
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Block', style: 'destructive', onPress: async () => {
+                        try {
+                          await api.users.block(post.user_id);
+                          onDelete(); // reuse onDelete to remove this post from the list
+                        } catch (e: any) {
+                          Alert.alert('Error', e.message);
+                        }
+                      }},
+                    ],
+                  )
+                },
                 { text: 'Report post', style: 'destructive', onPress: () =>
                   Alert.alert('Report this post?', 'We\'ll review it.', [
                     { text: 'Cancel', style: 'cancel' },

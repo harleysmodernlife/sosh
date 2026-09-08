@@ -39,6 +39,7 @@ class UserProfile(BaseModel):
     follower_count: int = 0
     following_count: int = 0
     viewer_is_following: bool = False
+    viewer_has_blocked: bool = False
     is_admin: bool = False
 
 
@@ -141,7 +142,8 @@ async def get_user_profile(
                    (SELECT COUNT(*) FROM trophies WHERE user_id = u.id) AS trophy_count,
                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) AS follower_count,
                    (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) AS following_count,
-                   (EXISTS (SELECT 1 FROM follows WHERE follower_id = :viewer_id AND following_id = u.id)) AS viewer_is_following
+                   (EXISTS (SELECT 1 FROM follows WHERE follower_id = :viewer_id AND following_id = u.id)) AS viewer_is_following,
+                   (EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = :viewer_id AND blocked_id = u.id)) AS viewer_has_blocked
             FROM users u
             LEFT JOIN sosh_score_snapshots s ON s.user_id = u.id
             WHERE u.id = :user_id
@@ -247,6 +249,47 @@ async def unfollow_user(
     await db.execute(
         text("DELETE FROM follows WHERE follower_id = :follower AND following_id = :following"),
         {"follower": current_user.user_id, "following": user_id},
+    )
+    await db.commit()
+
+
+@router.post("/{user_id}/block", status_code=status.HTTP_204_NO_CONTENT)
+async def block_user(
+    user_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if str(user_id) == current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block yourself")
+    # Remove any follow relationship in both directions
+    await db.execute(
+        text("""
+            DELETE FROM follows
+            WHERE (follower_id = :me AND following_id = :them)
+               OR (follower_id = :them AND following_id = :me)
+        """),
+        {"me": current_user.user_id, "them": str(user_id)},
+    )
+    await db.execute(
+        text("""
+            INSERT INTO user_blocks (blocker_id, blocked_id)
+            VALUES (:blocker, :blocked)
+            ON CONFLICT DO NOTHING
+        """),
+        {"blocker": current_user.user_id, "blocked": str(user_id)},
+    )
+    await db.commit()
+
+
+@router.delete("/{user_id}/block", status_code=status.HTTP_204_NO_CONTENT)
+async def unblock_user(
+    user_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        text("DELETE FROM user_blocks WHERE blocker_id = :blocker AND blocked_id = :blocked"),
+        {"blocker": current_user.user_id, "blocked": str(user_id)},
     )
     await db.commit()
 
