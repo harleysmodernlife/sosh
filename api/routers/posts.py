@@ -118,10 +118,16 @@ async def get_post_feed(
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
+                   p.repost_of_id::text,
+                   ur.username AS repost_original_username,
+                   ur.display_name AS repost_original_display_name,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
-                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
+                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted
             FROM posts p
             JOIN users u ON u.id = p.user_id
+            LEFT JOIN posts orig ON orig.id = p.repost_of_id
+            LEFT JOIN users ur ON ur.id = orig.user_id
             {where}
             ORDER BY (EXTRACT(EPOCH FROM p.created_at) + p.like_count * 3600) DESC
             LIMIT :limit OFFSET :offset
@@ -194,10 +200,16 @@ async def get_post(
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
+                   p.repost_of_id::text,
+                   ur.username AS repost_original_username,
+                   ur.display_name AS repost_original_display_name,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
-                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
+                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted
             FROM posts p
             JOIN users u ON u.id = p.user_id
+            LEFT JOIN posts orig ON orig.id = p.repost_of_id
+            LEFT JOIN users ur ON ur.id = orig.user_id
             WHERE p.id = :post_id
         """),
         {"post_id": post_id, "viewer_id": current_user.user_id},
@@ -326,6 +338,65 @@ async def unlike_post(
 
 
 # ── Bookmarks ─────────────────────────────────────────────────────────────────
+
+@router.post("/{post_id}/repost", status_code=status.HTTP_201_CREATED)
+async def repost(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a repost. Idempotent — if already reposted, returns existing."""
+    # Check original exists and get its data
+    row = await db.execute(
+        text("SELECT id, content_type, text_content, media_url, caption FROM posts WHERE id = :id AND repost_of_id IS NULL"),
+        {"id": post_id},
+    )
+    original = row.mappings().first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Post not found or is already a repost")
+
+    # Idempotency: return existing repost if found
+    existing = await db.execute(
+        text("SELECT id::text FROM posts WHERE repost_of_id = :orig AND user_id = :uid"),
+        {"orig": post_id, "uid": current_user.user_id},
+    )
+    ex = existing.mappings().first()
+    if ex:
+        return {"id": ex["id"]}
+
+    new_id = str(uuid4())
+    await db.execute(
+        text("""
+            INSERT INTO posts (id, user_id, content_type, text_content, media_url, caption, repost_of_id)
+            VALUES (:id, :user_id, :content_type, :text_content, :media_url, :caption, :repost_of_id)
+        """),
+        {
+            "id": new_id,
+            "user_id": current_user.user_id,
+            "content_type": original["content_type"],
+            "text_content": original["text_content"],
+            "media_url": original["media_url"],
+            "caption": original["caption"],
+            "repost_of_id": str(post_id),
+        },
+    )
+    await db.commit()
+    return {"id": new_id}
+
+
+@router.delete("/{post_id}/repost", status_code=status.HTTP_204_NO_CONTENT)
+async def unrepost(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the current user's repost of this post."""
+    await db.execute(
+        text("DELETE FROM posts WHERE repost_of_id = :orig AND user_id = :uid"),
+        {"orig": post_id, "uid": current_user.user_id},
+    )
+    await db.commit()
+
 
 @router.post("/{post_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT)
 async def bookmark_post(

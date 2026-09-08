@@ -134,8 +134,12 @@ export interface Post {
   display_name: string | null;
   avatar_url: string | null;
   accent_color: string | null;
+  repost_of_id: string | null;
+  repost_original_username: string | null;
+  repost_original_display_name: string | null;
   viewer_has_liked: boolean;
   viewer_has_bookmarked: boolean;
+  viewer_has_reposted: boolean;
 }
 
 export interface Comment {

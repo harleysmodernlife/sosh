@@ -346,6 +346,7 @@ function PostCard({
   const [likeCount, setLikeCount] = useState(post.like_count);
   const [commentCount, setCommentCount] = useState(post.comment_count);
   const [bookmarked, setBookmarked] = useState(post.viewer_has_bookmarked);
+  const [reposted, setReposted] = useState(post.viewer_has_reposted);
   const [showComments, setShowComments] = useState(false);
   const [inFlight, setInFlight] = useState(false);
   const lastTapRef = useRef(0);
@@ -421,8 +422,27 @@ function PostCard({
     }
   }
 
+  async function toggleRepost() {
+    const was = reposted;
+    setReposted(!was);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      if (was) await api.posts.unrepost(post.id);
+      else await api.posts.repost(post.id);
+    } catch {
+      setReposted(was);
+    }
+  }
+
   return (
     <View style={styles.card}>
+      {post.repost_of_id && (
+        <View style={styles.repostLabel}>
+          <Text style={styles.repostLabelText}>
+            ↻ repost of {post.repost_original_display_name ?? (post.repost_original_username ? `@${post.repost_original_username}` : 'someone')}
+          </Text>
+        </View>
+      )}
       <TouchableOpacity
         style={styles.cardAuthor}
         onPress={() => router.push(`/user/${post.user_id}`)}
@@ -530,6 +550,9 @@ function PostCard({
         <TouchableOpacity style={styles.likeBtn} onPress={() => setShowComments(true)} activeOpacity={0.7}>
           <Text style={styles.commentIcon}>💬</Text>
           <Text style={styles.likeCount}>{commentCount}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.repostBtn} onPress={toggleRepost} activeOpacity={0.7}>
+          <Text style={[styles.repostBtnIcon, reposted && styles.repostBtnIconActive]}>↻</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bookmarkBtn} onPress={toggleBookmark} activeOpacity={0.7}>
           <Text style={[styles.bookmarkIcon, bookmarked && styles.bookmarkIconActive]}>
@@ -795,6 +818,11 @@ const styles = StyleSheet.create({
   cardCaption: { fontSize: 14, color: '#888', paddingHorizontal: 16, lineHeight: 20 },
   cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, gap: 20 },
   likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  repostLabel: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },
+  repostLabelText: { fontSize: 11, color: '#3a3a3a', fontWeight: '600' },
+  repostBtn: {},
+  repostBtnIcon: { fontSize: 18, color: '#333' },
+  repostBtnIconActive: { color: '#2a9d8f' },
   bookmarkBtn: { marginLeft: 'auto' },
   bookmarkIcon: { fontSize: 18, color: '#333' },
   bookmarkIconActive: { color: '#fff' },

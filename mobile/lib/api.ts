@@ -189,6 +189,12 @@ export const api = {
     unlike: (postId: string): Promise<void> =>
       apiFetch(`/posts/${postId}/like`, { method: 'DELETE' }),
 
+    repost: (postId: string): Promise<{ id: string }> =>
+      apiFetch(`/posts/${postId}/repost`, { method: 'POST' }),
+
+    unrepost: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/repost`, { method: 'DELETE' }),
+
     bookmark: (postId: string): Promise<void> =>
       apiFetch(`/posts/${postId}/bookmark`, { method: 'POST' }),
 
