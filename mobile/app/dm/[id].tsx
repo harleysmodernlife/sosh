@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,11 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import type { DirectMessage } from '@/lib/types';
@@ -31,6 +34,7 @@ export default function DMThreadScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
+  const [pendingMedia, setPendingMedia] = useState<{ uri: string; type: 'image' | 'video'; mimeType: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [otherName, setOtherName] = useState('');
   const listRef = useRef<FlatList>(null);
@@ -55,16 +59,44 @@ export default function DMThreadScreen() {
     load();
   }, [conversationId, currentUserId]);
 
+  async function pickMedia() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      quality: 0.85,
+      videoMaxDuration: 60,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video';
+    const mimeType = isVideo ? 'video/mp4' : (asset.mimeType ?? 'image/jpeg');
+    setPendingMedia({ uri: asset.uri, type: isVideo ? 'video' : 'image', mimeType });
+  }
+
   async function send() {
     const body = draft.trim();
-    if (!body || sending) return;
+    if ((!body && !pendingMedia) || sending) return;
     setSending(true);
+    const savedDraft = body;
+    const savedMedia = pendingMedia;
     setDraft('');
+    setPendingMedia(null);
     try {
-      const msg = await api.dm.send(conversationId, body);
+      let mediaUrl: string | undefined;
+      let mediaType: 'image' | 'video' | undefined;
+      if (savedMedia) {
+        const { upload_url, media_key } = await api.media.presign(savedMedia.mimeType);
+        await api.media.upload(upload_url, savedMedia.uri, savedMedia.mimeType);
+        // Build public URL from media_key
+        const supabaseUrl = 'https://gxtbcxkdodmfikkhncmw.supabase.co';
+        mediaUrl = `${supabaseUrl}/storage/v1/object/public/sosh-media/${media_key}`;
+        mediaType = savedMedia.type;
+      }
+      const msg = await api.dm.send(conversationId, body || null, mediaUrl, mediaType);
       setMessages(prev => [msg, ...prev]);
-    } catch {
-      setDraft(body); // restore on failure
+    } catch (e) {
+      setDraft(savedDraft);
+      setPendingMedia(savedMedia);
+      Alert.alert('Failed to send', 'Please try again.');
     } finally {
       setSending(false);
     }
@@ -114,7 +146,19 @@ export default function DMThreadScreen() {
         }
       />
 
+      {pendingMedia && (
+        <View style={styles.mediaPreviewRow}>
+          <Image source={{ uri: pendingMedia.uri }} style={styles.mediaPreviewThumb} />
+          <Text style={styles.mediaPreviewLabel}>{pendingMedia.type === 'video' ? '📹 Video' : '📷 Photo'} ready</Text>
+          <TouchableOpacity onPress={() => setPendingMedia(null)} style={styles.mediaPreviewRemove}>
+            <Text style={styles.mediaPreviewRemoveText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={styles.composer}>
+        <TouchableOpacity onPress={pickMedia} style={styles.mediaBtn} activeOpacity={0.7}>
+          <Text style={styles.mediaBtnIcon}>📎</Text>
+        </TouchableOpacity>
         <TextInput
           style={styles.composerInput}
           value={draft}
@@ -126,9 +170,9 @@ export default function DMThreadScreen() {
           returnKeyType="default"
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!draft.trim() && !pendingMedia || sending) && styles.sendBtnDisabled]}
           onPress={send}
-          disabled={!draft.trim() || sending}
+          disabled={(!draft.trim() && !pendingMedia) || sending}
           activeOpacity={0.8}
         >
           {sending
@@ -140,7 +184,21 @@ export default function DMThreadScreen() {
   );
 }
 
+function VideoBubble({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, p => { p.loop = true; });
+  return (
+    <VideoView
+      player={player}
+      style={styles.mediaBubbleVideo}
+      contentFit="cover"
+      nativeControls
+    />
+  );
+}
+
 function MessageBubble({ msg, isMe, showAvatar }: { msg: DirectMessage; isMe: boolean; showAvatar: boolean }) {
+  const hasMedia = !!msg.media_url;
+  const mediaOnly = hasMedia && !msg.body;
   return (
     <View style={[styles.bubbleRow, isMe && styles.bubbleRowMe]}>
       {!isMe && (
@@ -158,8 +216,16 @@ function MessageBubble({ msg, isMe, showAvatar }: { msg: DirectMessage; isMe: bo
           )}
         </View>
       )}
-      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-        <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.body}</Text>
+      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem, mediaOnly && styles.bubbleMedia]}>
+        {hasMedia && msg.media_type === 'image' && (
+          <Image source={{ uri: msg.media_url! }} style={styles.mediaBubbleImg} resizeMode="cover" />
+        )}
+        {hasMedia && msg.media_type === 'video' && (
+          <VideoBubble uri={msg.media_url!} />
+        )}
+        {msg.body ? (
+          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.body}</Text>
+        ) : null}
         <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{formatTime(msg.created_at)}</Text>
       </View>
     </View>
@@ -200,12 +266,24 @@ const styles = StyleSheet.create({
   emptyThread: { paddingTop: 60, alignItems: 'center' },
   emptyThreadText: { fontSize: 14, color: '#333', textAlign: 'center' },
 
+  mediaPreviewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: '#111', backgroundColor: '#000',
+  },
+  mediaPreviewThumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#111' },
+  mediaPreviewLabel: { flex: 1, color: '#aaa', fontSize: 13 },
+  mediaPreviewRemove: { padding: 6 },
+  mediaPreviewRemoveText: { color: '#555', fontSize: 16 },
+
   composer: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-end',
     paddingHorizontal: 16, paddingVertical: 12,
     borderTopWidth: 1, borderTopColor: '#111',
     backgroundColor: '#000',
   },
+  mediaBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  mediaBtnIcon: { fontSize: 22 },
   composerInput: {
     flex: 1, backgroundColor: '#111', borderWidth: 1, borderColor: '#222',
     borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11,
@@ -217,4 +295,8 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.3 },
   sendBtnText: { fontSize: 18, fontWeight: '900', color: '#000' },
+
+  bubbleMedia: { padding: 4, overflow: 'hidden' },
+  mediaBubbleImg: { width: 220, height: 220, borderRadius: 14 },
+  mediaBubbleVideo: { width: 220, height: 220, borderRadius: 14 },
 });

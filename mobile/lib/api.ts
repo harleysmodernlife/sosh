@@ -238,8 +238,8 @@ export const api = {
     messages: (conversationId: string, offset = 0, limit = 50): Promise<DirectMessage[]> =>
       apiFetch(`/dm/conversations/${conversationId}/messages?offset=${offset}&limit=${limit}`),
 
-    send: (conversationId: string, body: string): Promise<DirectMessage> =>
-      apiFetch(`/dm/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
+    send: (conversationId: string, body: string | null, mediaUrl?: string, mediaType?: 'image' | 'video'): Promise<DirectMessage> =>
+      apiFetch(`/dm/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body, media_url: mediaUrl, media_type: mediaType }) }),
 
     markRead: (conversationId: string): Promise<void> =>
       apiFetch(`/dm/conversations/${conversationId}/read`, { method: 'POST' }),

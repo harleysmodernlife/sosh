@@ -26,7 +26,9 @@ class StartConversationRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    body: str = Field(..., min_length=1, max_length=1000)
+    body: str | None = Field(None, max_length=1000)
+    media_url: str | None = Field(None, max_length=1000)
+    media_type: str | None = Field(None, pattern="^(image|video)$")
 
 
 @router.get("/conversations")
@@ -134,7 +136,7 @@ async def get_messages(
     rows = await db.execute(
         text("""
             SELECT dm.id::text, dm.conversation_id::text, dm.sender_id::text,
-                   dm.body, dm.created_at::text, dm.read_at::text,
+                   dm.body, dm.media_url, dm.media_type, dm.created_at::text, dm.read_at::text,
                    u.username AS sender_username,
                    u.display_name AS sender_display_name,
                    u.avatar_url AS sender_avatar_url,
@@ -179,24 +181,33 @@ async def send_message(
     )
     meta = info.mappings().first() or {}
 
+    if not body.body and not body.media_url:
+        raise HTTPException(status_code=400, detail="Message must have body or media")
+
     msg_id = str(uuid4())
     await db.execute(
         text("""
-            INSERT INTO direct_messages (id, conversation_id, sender_id, body)
-            VALUES (:id, :cid, :sender, :body)
+            INSERT INTO direct_messages (id, conversation_id, sender_id, body, media_url, media_type)
+            VALUES (:id, :cid, :sender, :body, :media_url, :media_type)
         """),
-        {"id": msg_id, "cid": conversation_id, "sender": current_user.user_id, "body": body.body},
+        {"id": msg_id, "cid": conversation_id, "sender": current_user.user_id,
+         "body": body.body, "media_url": body.media_url, "media_type": body.media_type},
     )
     await db.commit()
 
     if meta.get("recipient_token"):
-        preview = body.body if len(body.body) <= 80 else body.body[:77] + "..."
+        if body.body:
+            preview = body.body if len(body.body) <= 80 else body.body[:77] + "..."
+        elif body.media_type == "video":
+            preview = "📹 Video"
+        else:
+            preview = "📷 Photo"
         send_dm_notification(meta["recipient_token"], meta["sender_name"], preview, str(conversation_id))
 
     row = await db.execute(
         text("""
             SELECT dm.id::text, dm.conversation_id::text, dm.sender_id::text,
-                   dm.body, dm.created_at::text, dm.read_at::text,
+                   dm.body, dm.media_url, dm.media_type, dm.created_at::text, dm.read_at::text,
                    u.username AS sender_username,
                    u.display_name AS sender_display_name,
                    u.avatar_url AS sender_avatar_url,

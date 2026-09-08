@@ -187,7 +187,9 @@ export interface DirectMessage {
   id: string;
   conversation_id: string;
   sender_id: string;
-  body: string;
+  body: string | null;
+  media_url: string | null;
+  media_type: 'image' | 'video' | null;
   created_at: string;
   read_at: string | null;
   sender_username: string | null;
