@@ -188,6 +188,15 @@ export const api = {
 
     unlike: (postId: string): Promise<void> =>
       apiFetch(`/posts/${postId}/like`, { method: 'DELETE' }),
+
+    bookmark: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/bookmark`, { method: 'POST' }),
+
+    unbookmark: (postId: string): Promise<void> =>
+      apiFetch(`/posts/${postId}/bookmark`, { method: 'DELETE' }),
+
+    bookmarked: (offset = 0, limit = 20): Promise<Post[]> =>
+      apiFetch(`/posts/bookmarked?offset=${offset}&limit=${limit}`),
   },
 
   // ─── Comments ─────────────────────────────────────────────────────────────

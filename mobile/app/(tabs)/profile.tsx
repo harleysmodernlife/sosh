@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [entries, setEntries] = useState<MyEntry[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -111,15 +112,17 @@ export default function ProfileScreen() {
     if (isRefresh) setRefreshing(true);
     try {
       const me = await api.users.me();
-      const [myTrophies, myEntries, myPosts] = await Promise.all([
+      const [myTrophies, myEntries, myPosts, mySaved] = await Promise.all([
         api.trophies.mine(),
         api.users.myEntries(),
         api.posts.forUser(me.id),
+        api.posts.bookmarked(),
       ]);
       setUser(me);
       setTrophies(myTrophies);
       setEntries(myEntries);
       setPosts(myPosts);
+      setSavedPosts(mySaved);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }
   }
@@ -300,6 +303,38 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.newPostCta} onPress={() => router.push('/compose')}>
             <Text style={styles.newPostCtaText}>+ Share your first post</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Saved Posts */}
+        {savedPosts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>SAVED</Text>
+            <View style={styles.postsGrid}>
+              {savedPosts.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.gridCell}
+                  onPress={() => setSelectedPost(p)}
+                  activeOpacity={0.8}
+                >
+                  {p.content_type !== 'text' && p.media_url ? (
+                    <Image source={{ uri: p.media_url }} style={styles.gridCellImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.gridCellText}>
+                      <Text style={styles.gridCellTextContent} numberOfLines={4}>
+                        {p.text_content}
+                      </Text>
+                    </View>
+                  )}
+                  {p.content_type === 'video' && (
+                    <View style={styles.gridVideoIcon}>
+                      <Text style={styles.gridVideoIconText}>▶</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         )}
 
         {/* My Entries */}

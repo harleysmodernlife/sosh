@@ -118,14 +118,12 @@ async def get_post_feed(
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
-                   (EXISTS (
-                       SELECT 1 FROM post_likes pl
-                       WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
-                   )) AS viewer_has_liked
+                   (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
             FROM posts p
             JOIN users u ON u.id = p.user_id
             {where}
-            ORDER BY p.created_at DESC
+            ORDER BY (EXTRACT(EPOCH FROM p.created_at) + p.like_count * 3600) DESC
             LIMIT :limit OFFSET :offset
         """),
         {"viewer_id": current_user.user_id, "limit": limit, "offset": offset},
@@ -146,10 +144,8 @@ async def get_user_posts(
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
-                   (EXISTS (
-                       SELECT 1 FROM post_likes pl
-                       WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
-                   )) AS viewer_has_liked
+                   (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
             FROM posts p
             JOIN users u ON u.id = p.user_id
             WHERE p.user_id = :user_id
@@ -157,6 +153,32 @@ async def get_user_posts(
             LIMIT :limit OFFSET :offset
         """),
         {"user_id": user_id, "viewer_id": current_user.user_id, "limit": limit, "offset": offset},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
+@router.get("/bookmarked")
+async def get_bookmarked_posts(
+    offset: int = 0,
+    limit: int = 20,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        text("""
+            SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
+                   p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
+                   u.username, u.display_name, u.avatar_url, u.accent_color,
+                   (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
+                   TRUE AS viewer_has_bookmarked
+            FROM post_bookmarks pb
+            JOIN posts p ON p.id = pb.post_id
+            JOIN users u ON u.id = p.user_id
+            WHERE pb.user_id = :viewer_id
+            ORDER BY pb.created_at DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        {"viewer_id": current_user.user_id, "limit": limit, "offset": offset},
     )
     return [dict(r) for r in rows.mappings().all()]
 
@@ -172,10 +194,8 @@ async def get_post(
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
-                   (EXISTS (
-                       SELECT 1 FROM post_likes pl
-                       WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
-                   )) AS viewer_has_liked
+                   (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
             FROM posts p
             JOIN users u ON u.id = p.user_id
             WHERE p.id = :post_id
@@ -302,6 +322,34 @@ async def unlike_post(
             text("UPDATE posts SET like_count = GREATEST(like_count - 1, 0) WHERE id = :id"),
             {"id": post_id},
         )
+    await db.commit()
+
+
+# ── Bookmarks ─────────────────────────────────────────────────────────────────
+
+@router.post("/{post_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT)
+async def bookmark_post(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        text("INSERT INTO post_bookmarks (post_id, user_id) VALUES (:post_id, :user_id) ON CONFLICT DO NOTHING"),
+        {"post_id": post_id, "user_id": current_user.user_id},
+    )
+    await db.commit()
+
+
+@router.delete("/{post_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT)
+async def unbookmark_post(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        text("DELETE FROM post_bookmarks WHERE post_id = :post_id AND user_id = :user_id"),
+        {"post_id": post_id, "user_id": current_user.user_id},
+    )
     await db.commit()
 
 

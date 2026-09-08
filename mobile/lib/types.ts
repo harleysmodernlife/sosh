@@ -135,6 +135,7 @@ export interface Post {
   avatar_url: string | null;
   accent_color: string | null;
   viewer_has_liked: boolean;
+  viewer_has_bookmarked: boolean;
 }
 
 export interface Comment {

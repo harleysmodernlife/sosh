@@ -345,6 +345,7 @@ function PostCard({
   const [liked, setLiked] = useState(post.viewer_has_liked);
   const [likeCount, setLikeCount] = useState(post.like_count);
   const [commentCount, setCommentCount] = useState(post.comment_count);
+  const [bookmarked, setBookmarked] = useState(post.viewer_has_bookmarked);
   const [showComments, setShowComments] = useState(false);
   const [inFlight, setInFlight] = useState(false);
   const lastTapRef = useRef(0);
@@ -405,6 +406,18 @@ function PostCard({
       onLikeUpdate(post.id, wasLiked, likeCount);
     } finally {
       setInFlight(false);
+    }
+  }
+
+  async function toggleBookmark() {
+    const was = bookmarked;
+    setBookmarked(!was);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      if (was) await api.posts.unbookmark(post.id);
+      else await api.posts.bookmark(post.id);
+    } catch {
+      setBookmarked(was);
     }
   }
 
@@ -517,6 +530,11 @@ function PostCard({
         <TouchableOpacity style={styles.likeBtn} onPress={() => setShowComments(true)} activeOpacity={0.7}>
           <Text style={styles.commentIcon}>💬</Text>
           <Text style={styles.likeCount}>{commentCount}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.bookmarkBtn} onPress={toggleBookmark} activeOpacity={0.7}>
+          <Text style={[styles.bookmarkIcon, bookmarked && styles.bookmarkIconActive]}>
+            {bookmarked ? '◆' : '◇'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.7}>
           <Text style={styles.shareIcon}>↑</Text>
@@ -777,7 +795,10 @@ const styles = StyleSheet.create({
   cardCaption: { fontSize: 14, color: '#888', paddingHorizontal: 16, lineHeight: 20 },
   cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, gap: 20 },
   likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  shareBtn: { marginLeft: 'auto' },
+  bookmarkBtn: { marginLeft: 'auto' },
+  bookmarkIcon: { fontSize: 18, color: '#333' },
+  bookmarkIconActive: { color: '#fff' },
+  shareBtn: {},
   shareIcon: { fontSize: 18, color: '#444', fontWeight: '700' },
   likeIcon: { fontSize: 20, color: '#333' },
   likeIconActive: { color: '#e63946' },

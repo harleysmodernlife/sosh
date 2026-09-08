@@ -43,7 +43,7 @@ async def get_feed(
             JOIN users u  ON u.id = pe.user_id
             WHERE p.status = 'resolved'
               AND pe.moderation_status = 'approved'
-            ORDER BY pe.created_at DESC
+            ORDER BY (EXTRACT(EPOCH FROM pe.created_at) + pe.vote_count * 3600) DESC
             LIMIT :limit OFFSET :offset
         """),
         {"limit": limit, "offset": offset},
