@@ -414,22 +414,65 @@ export default function AdminScreen() {
           ) : (
             <>
               {postReports.map((r, i) => (
-                <View key={i} style={styles.reportRow}>
+                <View key={r.post_id ?? i} style={styles.reportRow}>
                   <Text style={styles.reportType}>POST</Text>
                   <View style={styles.reportBody}>
                     <Text style={styles.reportText} numberOfLines={2}>{r.text_content ?? `[${r.content_type}]`}</Text>
-                    <Text style={styles.reportMeta}>by @{r.post_author_username} · reported by @{r.reporter_username}</Text>
-                    {r.reason ? <Text style={styles.reportReason}>"{r.reason}"</Text> : null}
+                    <Text style={styles.reportMeta}>by @{r.post_author_username} · {r.report_count} report{r.report_count !== 1 ? 's' : ''}</Text>
+                  </View>
+                  <View style={styles.reportActions}>
+                    <TouchableOpacity
+                      style={styles.reportDismiss}
+                      onPress={() => setPostReports(prev => prev.filter((_, j) => j !== i))}
+                    >
+                      <Text style={styles.reportDismissText}>Dismiss</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.reportDelete}
+                      onPress={() => Alert.alert('Delete post?', 'This removes the post permanently.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: async () => {
+                          try {
+                            await api.admin.deletePost(r.post_id);
+                            setPostReports(prev => prev.filter((_, j) => j !== i));
+                          } catch (e: any) { Alert.alert('Error', e.message); }
+                        }},
+                      ])}
+                    >
+                      <Text style={styles.reportDeleteText}>Delete</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))}
               {userReports.map((r, i) => (
-                <View key={i} style={styles.reportRow}>
+                <View key={r.reported_user_id ?? i} style={styles.reportRow}>
                   <Text style={styles.reportType}>USER</Text>
                   <View style={styles.reportBody}>
                     <Text style={styles.reportText}>@{r.reported_username}</Text>
-                    <Text style={styles.reportMeta}>reported by @{r.reporter_username}</Text>
-                    {r.reason ? <Text style={styles.reportReason}>"{r.reason}"</Text> : null}
+                    <Text style={styles.reportMeta}>{r.report_count} report{r.report_count !== 1 ? 's' : ''}</Text>
+                  </View>
+                  <View style={styles.reportActions}>
+                    <TouchableOpacity
+                      style={styles.reportDismiss}
+                      onPress={() => setUserReports(prev => prev.filter((_, j) => j !== i))}
+                    >
+                      <Text style={styles.reportDismissText}>Dismiss</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.reportDelete}
+                      onPress={() => Alert.alert(`Ban @${r.reported_username}?`, 'This permanently deletes their account and all data. Cannot be undone.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Ban', style: 'destructive', onPress: async () => {
+                          try {
+                            await api.admin.banUser(r.reported_user_id);
+                            setUserReports(prev => prev.filter((_, j) => j !== i));
+                            Alert.alert('Done', `@${r.reported_username} has been banned.`);
+                          } catch (e: any) { Alert.alert('Error', e.message); }
+                        }},
+                      ])}
+                    >
+                      <Text style={styles.reportDeleteText}>Ban</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))}
@@ -550,10 +593,15 @@ const styles = StyleSheet.create({
   inviteUsed: { color: '#444' },
   inviteAvailable: { color: '#4caf50' },
 
-  reportRow: { flexDirection: 'row', gap: 10, backgroundColor: '#0f0f0f', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', padding: 12 },
+  reportRow: { flexDirection: 'row', gap: 10, backgroundColor: '#0f0f0f', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', padding: 12, alignItems: 'center' },
   reportType: { fontSize: 9, fontWeight: '900', color: '#555', letterSpacing: 2, paddingTop: 2, width: 36 },
   reportBody: { flex: 1, gap: 3 },
   reportText: { fontSize: 13, color: '#ccc' },
   reportMeta: { fontSize: 11, color: '#555' },
   reportReason: { fontSize: 11, color: '#666', fontStyle: 'italic' },
+  reportActions: { gap: 6, alignItems: 'flex-end' },
+  reportDismiss: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#333' },
+  reportDismissText: { fontSize: 11, color: '#555', fontWeight: '600' },
+  reportDelete: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#3a0000', borderWidth: 1, borderColor: '#600' },
+  reportDeleteText: { fontSize: 11, color: '#ff4444', fontWeight: '700' },
 });

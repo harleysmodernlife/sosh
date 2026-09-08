@@ -8,6 +8,7 @@ POST /admin/pulses/{id}/resolve — manually trigger leaderboard resolution
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rq_scheduler import Scheduler
 
 from auth import AuthenticatedUser, get_current_user
+from config import settings
 from database import get_db
 from redis_client import redis_sync
 from workers.jobs import enqueue_leaderboard_resolve, enqueue_push_pulse_notification
@@ -218,3 +220,63 @@ async def delete_schedule(
         scheduler.cancel(DAILY_CRON_ID)
     except Exception:
         pass
+
+
+# ─── Moderation ───────────────────────────────────────────────────────────────
+
+@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_delete_post(
+    post_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: delete any post regardless of ownership."""
+    await _require_admin(current_user, db)
+    result = await db.execute(
+        text("DELETE FROM posts WHERE id = :id"),
+        {"id": post_id},
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_ban_user(
+    user_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: permanently ban (delete) a user account and all their data."""
+    await _require_admin(current_user, db)
+    uid = str(user_id)
+
+    await db.execute(text("DELETE FROM votes WHERE voter_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM pulse_entries WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM trophies WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM leaderboard_results WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM sosh_score_snapshots WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": uid})
+    await db.execute(
+        text("UPDATE invite_codes SET used_by = NULL, used_at = NULL WHERE used_by = :uid"),
+        {"uid": uid},
+    )
+    result = await db.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": uid})
+    await db.commit()
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if settings.supabase_url and settings.supabase_service_role_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.delete(
+                    f"{settings.supabase_url}/auth/v1/admin/users/{uid}",
+                    headers={
+                        "apikey": settings.supabase_service_role_key,
+                        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                    },
+                    timeout=10,
+                )
+        except Exception:
+            pass

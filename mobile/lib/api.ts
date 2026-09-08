@@ -245,6 +245,12 @@ export const api = {
 
     deleteSchedule: (): Promise<void> =>
       apiFetch('/admin/schedule', { method: 'DELETE' }),
+
+    deletePost: (postId: string): Promise<void> =>
+      apiFetch(`/admin/posts/${postId}`, { method: 'DELETE' }),
+
+    banUser: (userId: string): Promise<void> =>
+      apiFetch(`/admin/users/${userId}`, { method: 'DELETE' }),
   },
 
   // ─── Media ────────────────────────────────────────────────────────────────

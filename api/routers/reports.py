@@ -101,23 +101,33 @@ async def report_user(
 
 # ── Admin: view reports ───────────────────────────────────────────────────────
 
+async def _require_admin(user_id: str, db: AsyncSession):
+    row = await db.execute(
+        text("SELECT 1 FROM user_roles WHERE user_id = :uid AND role = 'admin'"),
+        {"uid": user_id},
+    )
+    if not row.first():
+        raise HTTPException(status_code=403, detail="Admin only")
+
+
 @router.get("/admin/posts")
 async def admin_post_reports(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _require_admin(current_user.user_id, db)
+    await _require_admin(current_user.user_id, db)
     rows = await db.execute(
         text("""
-            SELECT pr.post_id::text, pr.reported_by::text, pr.reason, pr.created_at::text,
-                   u.username AS reporter_username,
+            SELECT p.id::text AS post_id,
                    p.content_type, p.text_content, p.media_url,
-                   pu.username AS post_author_username
+                   pu.username AS post_author_username,
+                   COUNT(pr.reported_by) AS report_count,
+                   MAX(pr.created_at)::text AS latest_report_at
             FROM post_reports pr
-            JOIN users u ON u.id = pr.reported_by
             JOIN posts p ON p.id = pr.post_id
             JOIN users pu ON pu.id = p.user_id
-            ORDER BY pr.created_at DESC
+            GROUP BY p.id, p.content_type, p.text_content, p.media_url, pu.username
+            ORDER BY report_count DESC, latest_report_at DESC
             LIMIT 100
         """),
     )
@@ -129,25 +139,18 @@ async def admin_user_reports(
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _require_admin(current_user.user_id, db)
     rows = await db.execute(
         text("""
-            SELECT ur.user_id::text, ur.reported_by::text, ur.reason, ur.created_at::text,
-                   reporter.username AS reporter_username,
-                   reported.username AS reported_username
+            SELECT reported.id::text AS reported_user_id,
+                   reported.username AS reported_username,
+                   COUNT(ur.reported_by) AS report_count,
+                   MAX(ur.created_at)::text AS latest_report_at
             FROM user_reports ur
-            JOIN users reporter ON reporter.id = ur.reported_by
             JOIN users reported ON reported.id = ur.user_id
-            ORDER BY ur.created_at DESC
+            GROUP BY reported.id, reported.username
+            ORDER BY report_count DESC, latest_report_at DESC
             LIMIT 100
         """),
     )
     return [dict(r) for r in rows.mappings().all()]
-
-
-async def _require_admin(user_id: str, db: AsyncSession):
-    row = await db.execute(
-        text("SELECT 1 FROM user_roles WHERE user_id = :uid AND role = 'admin'"),
-        {"uid": user_id},
-    )
-    if not row.first():
-        raise HTTPException(status_code=403, detail="Admin only")
