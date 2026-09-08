@@ -15,7 +15,8 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '@/lib/api';
-import type { Pulse, Entry } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
+import type { Pulse, Entry, ResolvedPulse } from '@/lib/types';
 import { useCountdown } from '@/components/useCountdown';
 
 type CaptureMode = 'text' | 'photo' | 'video';
@@ -35,6 +36,9 @@ export default function PulseScreen() {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [myEntry, setMyEntry] = useState<Entry | null>(null);
   const [entryCount, setEntryCount] = useState<number | null>(null);
+  const [lastResolved, setLastResolved] = useState<ResolvedPulse | null>(null);
+  const [lastEntries, setLastEntries] = useState<Entry[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const recordingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -42,6 +46,10 @@ export default function PulseScreen() {
 
   async function loadPulse() {
     try {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id ?? null;
+      setCurrentUserId(uid);
+
       const p = await api.pulses.active();
       setPulse(p);
       if (p && p.status === 'active') {
@@ -49,6 +57,13 @@ export default function PulseScreen() {
         setEntryCount(ents.length);
       } else {
         setEntryCount(null);
+        // Load last resolved for stats card
+        const resolved = await api.pulses.resolved();
+        if (resolved.length > 0) {
+          setLastResolved(resolved[0]);
+          const ents = await api.pulses.entries(resolved[0].id);
+          setLastEntries(ents.sort((a, b) => b.vote_count - a.vote_count));
+        }
       }
     } catch {}
     finally { setLoading(false); }
@@ -166,6 +181,54 @@ export default function PulseScreen() {
   }
 
   if (!pulse || pulse.status === 'resolved' || pulse.status === 'resolving') {
+    if (lastResolved) {
+      const myLastEntry = currentUserId ? lastEntries.find(e => e.user_id === currentUserId) : null;
+      const myLastRank = myLastEntry
+        ? lastEntries.findIndex(e => e.id === myLastEntry.id) + 1
+        : null;
+      return (
+        <ScrollView style={styles.container} contentContainerStyle={styles.statsContent}>
+          <Text style={styles.statsWaiting}>Signal quiet.</Text>
+          <Text style={styles.statsWaitingSub}>The Pulse fires without warning.{'\n'}This is the tab to be on when it does.</Text>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsCardLabel}>LAST PULSE</Text>
+            <Text style={styles.statsCardPrompt}>"{lastResolved.prompt}"</Text>
+            {lastResolved.winner_username && (
+              <View style={styles.statsWinner}>
+                <Text style={styles.statsWinnerLabel}>WINNER</Text>
+                <Text style={styles.statsWinnerName}>
+                  {lastResolved.winner_display_name ?? `@${lastResolved.winner_username}`}
+                </Text>
+                {lastResolved.winner_votes != null && (
+                  <Text style={styles.statsWinnerVotes}>{lastResolved.winner_votes} votes</Text>
+                )}
+              </View>
+            )}
+            <View style={styles.statsRow}>
+              <View style={styles.statCell}>
+                <Text style={styles.statCellValue}>{lastEntries.length}</Text>
+                <Text style={styles.statCellLabel}>ENTRIES</Text>
+              </View>
+              {myLastRank !== null && (
+                <View style={styles.statCell}>
+                  <Text style={styles.statCellValue}>#{myLastRank}</Text>
+                  <Text style={styles.statCellLabel}>YOUR RANK</Text>
+                </View>
+              )}
+              {myLastEntry && (
+                <View style={styles.statCell}>
+                  <Text style={styles.statCellValue}>{myLastEntry.vote_count}</Text>
+                  <Text style={styles.statCellLabel}>YOUR VOTES</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          <TouchableOpacity style={styles.seeResultsBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
+            <Text style={styles.seeResultsBtnText}>See full results →</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      );
+    }
     return (
       <View style={styles.center}>
         <Text style={styles.noPulseIcon}>◉</Text>
@@ -429,6 +492,23 @@ const styles = StyleSheet.create({
   noPulseIcon: { fontSize: 52, color: '#1a1a1a', marginBottom: 4 },
   noPulseTitle: { fontSize: 24, fontWeight: '800', color: '#333' },
   noPulseText: { fontSize: 15, color: '#2a2a2a', textAlign: 'center', lineHeight: 23 },
+
+  statsContent: { paddingTop: 80, paddingHorizontal: 20, paddingBottom: 48, gap: 20 },
+  statsWaiting: { fontSize: 22, fontWeight: '800', color: '#333', textAlign: 'center' },
+  statsWaitingSub: { fontSize: 14, color: '#2a2a2a', textAlign: 'center', lineHeight: 22 },
+  statsCard: { backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', padding: 20, gap: 16 },
+  statsCardLabel: { fontSize: 11, fontWeight: '800', color: '#444', letterSpacing: 2 },
+  statsCardPrompt: { fontSize: 18, fontWeight: '700', color: '#ddd', lineHeight: 26 },
+  statsWinner: { backgroundColor: '#0a0f0a', borderRadius: 10, padding: 14, gap: 4, borderWidth: 1, borderColor: '#1a2a1a' },
+  statsWinnerLabel: { fontSize: 10, fontWeight: '800', color: '#2a5a2a', letterSpacing: 2 },
+  statsWinnerName: { fontSize: 18, fontWeight: '800', color: '#4caf50' },
+  statsWinnerVotes: { fontSize: 13, color: '#2a5a2a' },
+  statsRow: { flexDirection: 'row', gap: 12 },
+  statCell: { flex: 1, backgroundColor: '#111', borderRadius: 10, padding: 14, alignItems: 'center', gap: 4 },
+  statCellValue: { fontSize: 22, fontWeight: '900', color: '#fff' },
+  statCellLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 1 },
+  seeResultsBtn: { alignSelf: 'center', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: '#222' },
+  seeResultsBtnText: { color: '#555', fontSize: 14, fontWeight: '600' },
 
   votingIcon: { fontSize: 48, marginBottom: 4 },
   votingTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
