@@ -1,9 +1,10 @@
 # Sösh API Reference
 
-**Version:** 0.2.0
+**Version:** 0.3.0
 **Base URL (local):** `http://localhost:8000`
 **Base URL (production):** `https://sosh-production.up.railway.app`
 **Interactive docs:** `{base_url}/docs` (non-production only)
+**Last Updated:** 2026-09-08
 
 ---
 
@@ -111,15 +112,41 @@ Returns `[]` if the user has never submitted an entry.
 
 ---
 
+#### `GET /users/search` — public
+
+Search users by username or display name (case-insensitive prefix/substring match). Returns up to 20 results.
+
+**Query params:** `q` — search string (required)
+
+**Response 200** — array of user objects (same shape as `/users/me`)
+
+---
+
 #### `GET /users/{user_id}` — public (auth optional)
 
-Returns any user's public profile. If a valid `Authorization` header is present, `viewer_is_following` reflects whether the authenticated user follows this user.
+Returns any user's public profile. If a valid `Authorization` header is present, `viewer_is_following` and `viewer_has_blocked` reflect the authenticated user's relationship with this user.
 
 **Path params:** `user_id` — UUID
 
-**Response 200** — same shape as `/users/me`, `is_admin` always `false` on public profiles
+**Response 200** — same shape as `/users/me`, `is_admin` always `false` on public profiles, includes `viewer_has_blocked: bool`
 
 **Response 404** — user not found
+
+---
+
+#### `GET /users/{user_id}/followers` — public
+
+Returns the list of users who follow the given user.
+
+**Response 200** — array of `{id, username, display_name, avatar_url, accent_color}`
+
+---
+
+#### `GET /users/{user_id}/following` — public
+
+Returns the list of users the given user follows.
+
+**Response 200** — array of `{id, username, display_name, avatar_url, accent_color}`
 
 ---
 
@@ -180,6 +207,28 @@ Follow a user. Idempotent — following someone you already follow is a no-op.
 #### `DELETE /users/{user_id}/follow`
 
 Unfollow a user.
+
+**Path params:** `user_id` — UUID
+
+**Response 204**
+
+---
+
+#### `POST /users/{user_id}/block`
+
+Block a user. Removes follow relationships in both directions (you stop following them and they stop following you). Their posts are hidden from your feed. Idempotent.
+
+**Path params:** `user_id` — UUID of the user to block
+
+**Response 204**
+
+**Response 400** — cannot block yourself
+
+---
+
+#### `DELETE /users/{user_id}/block`
+
+Unblock a user.
 
 **Path params:** `user_id` — UUID
 
@@ -489,11 +538,339 @@ Returns `[]` when no more entries are available (end of feed).
 
 ---
 
+### Posts
+
+#### `POST /posts`
+
+Create a freeform social post.
+
+**Request body — text post**
+```json
+{"content_type": "text", "text_content": "Hello world"}
+```
+
+**Request body — photo/video post**
+```json
+{
+  "content_type": "photo",
+  "media_url": "https://...supabase.co/storage/.../post.jpg",
+  "caption": "Optional caption"
+}
+```
+
+**Constraints:**
+- `text_content` — required for text, max 500 chars
+- `media_url` — required for photo/video
+- `caption` — optional, max 200 chars
+
+**Response 201** — full post object (see below)
+
+---
+
+#### `GET /posts/feed`
+
+Returns the social post feed.
+
+**Query params:**
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `offset` | int | 0 | Pagination offset |
+| `limit` | int | 20 | Max 20 |
+| `mode` | string | `foryou` | `foryou` (global) or `following` (followed users only) |
+
+**Response 200**
+```json
+[
+  {
+    "id": "abc123-...",
+    "user_id": "9d3c9c1f-...",
+    "content_type": "text",
+    "text_content": "Hello world",
+    "media_url": null,
+    "caption": null,
+    "like_count": 3,
+    "comment_count": 1,
+    "created_at": "2026-09-08 10:00:00",
+    "username": "Harleysmodernlife",
+    "display_name": "Captain",
+    "avatar_url": "https://...",
+    "accent_color": "#E63946",
+    "viewer_has_liked": false
+  }
+]
+```
+
+Posts from blocked users are excluded.
+
+---
+
+#### `GET /posts/search`
+
+Search posts by text content or caption (case-insensitive substring match). Returns up to 40 results, newest first.
+
+**Query params:** `q` — search string (required)
+
+**Response 200** — array of post objects (same shape as feed), includes `viewer_has_liked`
+
+---
+
+#### `GET /posts/user/{user_id}`
+
+All posts by a specific user, newest first.
+
+**Query params:** `offset` (default 0), `limit` (default 30)
+
+**Response 200** — array of post objects
+
+---
+
+#### `GET /posts/{post_id}`
+
+Get a single post by ID.
+
+**Response 200** — post object
+
+**Response 404** — post not found
+
+---
+
+#### `PATCH /posts/{post_id}` — 204
+
+Update text content or caption of a post. Own posts only.
+
+**Request body** (all optional)
+```json
+{"text_content": "Updated text", "caption": null}
+```
+
+**Response 204**
+
+**Response 404** — post not found or not yours
+
+---
+
+#### `DELETE /posts/{post_id}`
+
+Delete a post. Own posts only.
+
+**Response 204**
+
+**Response 404** — post not found or not yours
+
+---
+
+#### `POST /posts/{post_id}/like`
+
+Like a post. Idempotent. Sends a push notification to the post author (excluding self-likes).
+
+**Response 204**
+
+---
+
+#### `DELETE /posts/{post_id}/like`
+
+Unlike a post.
+
+**Response 204**
+
+---
+
+### Comments
+
+#### `GET /posts/{post_id}/comments`
+
+Returns all comments on a post, oldest first.
+
+**Response 200**
+```json
+[
+  {
+    "id": "cmt123-...",
+    "post_id": "abc123-...",
+    "user_id": "9d3c9c1f-...",
+    "body": "Great post!",
+    "created_at": "2026-09-08 10:05:00",
+    "username": "Harleysmodernlife",
+    "display_name": "Captain",
+    "avatar_url": "https://...",
+    "accent_color": "#E63946"
+  }
+]
+```
+
+---
+
+#### `POST /posts/{post_id}/comments`
+
+Add a comment to a post. Sends a push notification to the post author (excluding self-comments).
+
+**Request body**
+```json
+{"body": "Great post!"}
+```
+
+**Constraints:** `body` — 1–300 chars
+
+**Response 201** — comment object (same shape as above)
+
+**Response 404** — post not found
+
+---
+
+#### `DELETE /posts/{post_id}/comments/{comment_id}`
+
+Delete a comment. Own comments only.
+
+**Response 204**
+
+**Response 404** — comment not found or not yours
+
+---
+
+### Notifications
+
+#### `GET /notifications`
+
+Returns the authenticated user's notification inbox, newest first. Returns up to 50 notifications.
+
+**Response 200**
+```json
+[
+  {
+    "id": "notif123-...",
+    "type": "like",
+    "body": "Captain liked your post",
+    "read": false,
+    "created_at": "2026-09-08 10:00:00",
+    "actor_id": "9d3c9c1f-...",
+    "post_id": "abc123-...",
+    "conversation_id": null
+  }
+]
+```
+
+**Notification types:** `pulse`, `trophy`, `results`, `milestone`, `like`, `comment`, `follow`, `dm`
+
+---
+
+#### `GET /notifications/unread-count`
+
+Returns the count of unread notifications.
+
+**Response 200**
+```json
+{"count": 3}
+```
+
+---
+
+#### `POST /notifications/read`
+
+Marks all notifications as read.
+
+**Response 204**
+
+---
+
+### Direct Messages
+
+#### `GET /dm/conversations`
+
+Returns the authenticated user's conversation list, most recently active first.
+
+**Response 200**
+```json
+[
+  {
+    "conversation_id": "conv123-...",
+    "other_user_id": "eab17969-...",
+    "other_username": "testadmin",
+    "other_display_name": null,
+    "other_avatar_url": null,
+    "other_accent_color": null,
+    "last_message_body": "Hey!",
+    "last_message_at": "2026-09-08 10:00:00",
+    "unread_count": 2
+  }
+]
+```
+
+---
+
+#### `POST /dm/conversations`
+
+Start or retrieve a conversation with a user. Idempotent — if a conversation already exists between the two users, returns the existing one.
+
+**Request body**
+```json
+{"user_id": "eab17969-..."}
+```
+
+**Response 200**
+```json
+{"conversation_id": "conv123-..."}
+```
+
+---
+
+#### `GET /dm/conversations/{conversation_id}/messages`
+
+Returns paginated messages in a conversation, newest first.
+
+**Query params:** `offset` (default 0), `limit` (default 50, max 50)
+
+**Response 200**
+```json
+[
+  {
+    "id": "msg123-...",
+    "conversation_id": "conv123-...",
+    "sender_id": "9d3c9c1f-...",
+    "body": "Hey!",
+    "created_at": "2026-09-08 10:00:00",
+    "read_at": null,
+    "sender_username": "Harleysmodernlife",
+    "sender_display_name": "Captain",
+    "sender_avatar_url": "https://..."
+  }
+]
+```
+
+**Response 403** — authenticated user is not a participant in this conversation
+
+---
+
+#### `POST /dm/conversations/{conversation_id}/messages`
+
+Send a message. Triggers a push notification to the recipient.
+
+**Request body**
+```json
+{"body": "Hey!"}
+```
+
+**Constraints:** `body` — 1–1000 chars
+
+**Response 201** — message object (same shape as above)
+
+**Response 403** — not a participant
+
+---
+
+#### `POST /dm/conversations/{conversation_id}/read`
+
+Mark all unread incoming messages in a conversation as read (sets `read_at = now()`).
+
+**Response 204**
+
+---
+
 ### Reports
 
 #### `POST /reports`
 
-Flag an entry for content moderation. Idempotent — reporting the same entry twice is silently ignored.
+Flag a Pulse entry for moderation. Idempotent.
 
 **Request body**
 ```json
@@ -503,6 +880,135 @@ Flag an entry for content moderation. Idempotent — reporting the same entry tw
 **Response 204**
 
 **Response 404** — entry not found
+
+---
+
+#### `POST /reports/post`
+
+Flag a social post for moderation. Idempotent.
+
+**Request body**
+```json
+{"post_id": "abc123-..."}
+```
+
+**Response 204**
+
+---
+
+#### `POST /reports/user`
+
+Flag a user for moderation. Idempotent.
+
+**Request body**
+```json
+{"user_id": "eab17969-..."}
+```
+
+**Response 204**
+
+---
+
+#### `GET /reports/admin/posts` — admin only
+
+Returns flagged posts aggregated by post, sorted by report count descending.
+
+**Response 200**
+```json
+[
+  {
+    "post_id": "abc123-...",
+    "text_content": "...",
+    "username": "someone",
+    "report_count": 5,
+    "created_at": "2026-09-08 09:00:00"
+  }
+]
+```
+
+---
+
+#### `GET /reports/admin/users` — admin only
+
+Returns flagged users aggregated by user, sorted by report count descending.
+
+**Response 200**
+```json
+[
+  {
+    "reported_user_id": "eab17969-...",
+    "username": "someone",
+    "report_count": 3
+  }
+]
+```
+
+---
+
+### Invites
+
+#### `POST /admin/invites` — admin only
+
+Generate a new invite code.
+
+**Request body** (all optional)
+```json
+{"label": "For Heather", "expires_days": 7}
+```
+
+**Response 201**
+```json
+{"code": "XKCD-4892", "label": "For Heather", "expires_at": "2026-09-15 18:00:00"}
+```
+
+---
+
+#### `GET /admin/invites` — admin only
+
+List all invite codes with redemption status.
+
+**Response 200**
+```json
+[
+  {
+    "id": "inv123-...",
+    "code": "XKCD-4892",
+    "label": "For Heather",
+    "created_at": "2026-09-08 18:00:00",
+    "expires_at": "2026-09-15 18:00:00",
+    "used_at": null,
+    "used_by_username": null
+  }
+]
+```
+
+---
+
+#### `GET /invites/{code}` — public
+
+Validate an invite code (used during signup to check the code is valid before completing registration).
+
+**Response 200**
+```json
+{"code": "XKCD-4892", "valid": true}
+```
+
+`valid: false` if the code doesn't exist, is expired, or has already been used.
+
+---
+
+#### `POST /invites/{code}/redeem`
+
+Redeem an invite code for a user. Called during onboarding after the user account is created.
+
+**Request body**
+```json
+{"user_id": "9d3c9c1f-..."}
+```
+
+**Response 204**
+
+**Response 400** — code invalid, expired, or already redeemed
 
 ---
 
@@ -656,6 +1162,26 @@ Set or update the automated daily Pulse schedule. Uses standard cron syntax. The
 Remove the automated daily Pulse schedule.
 
 **Response 204**
+
+---
+
+#### `DELETE /admin/posts/{post_id}` — admin only
+
+Delete any post regardless of ownership. Used to remove flagged content after reviewing admin reports.
+
+**Response 204**
+
+**Response 404** — post not found
+
+---
+
+#### `DELETE /admin/users/{user_id}` — admin only
+
+Ban a user: performs a full account deletion (same cascade as `DELETE /users/me`) plus Supabase Auth removal. Irreversible.
+
+**Response 204**
+
+**Response 404** — user not found
 
 ---
 

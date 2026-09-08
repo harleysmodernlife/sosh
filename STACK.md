@@ -1,8 +1,8 @@
 # Sösh — Technology Stack
-**Version:** 0.2
-**Status:** Decided — revised for zero-cost development and early operation
-**Depends on:** DESIGN.md v0.1, FLOWS.md v0.1, SCHEMA.md v0.1
-**Last Updated:** 2026-09-06
+**Version:** 0.3
+**Status:** Current — reflects actual live stack
+**Depends on:** DESIGN.md v0.1, FLOWS.md v0.1
+**Last Updated:** 2026-09-08
 
 ---
 
@@ -41,12 +41,12 @@ This stack is optimized for a **solo developer with AI assistance** running guer
 | Mobile app | React Native + Expo | $0 | TypeScript, device APIs simplified, cross-platform |
 | Mobile testing | Expo Go on device | $0 | No developer account needed until App Store submission |
 | Main API | FastAPI (Python) | $0 | Async-native, Python experience |
-| API hosting | Fly.io free tier | $0 | 3 VMs, no sleep, no credit card required |
-| Job queue | RQ (Redis Queue) | $0 | Simple, Python, uses Redis already on Fly.io |
-| Relational DB | PostgreSQL + PostGIS | $0 | Hard requirement from schema |
-| DB hosting | Supabase free tier | $0 | 500MB DB, 50k MAU, PostGIS, Auth included |
-| Redis | Redis on Fly.io VM | $0 | Bundled in existing free Fly.io VM |
-| Media storage | Cloudflare R2 free tier | $0 | 10GB storage, no egress fees, CDN included |
+| API hosting | Railway | ~$5/mo | Auto-deploy from GitHub, better DX than Fly.io |
+| Job queue | RQ (Redis Queue) | $0 | Simple, Python, uses existing Redis |
+| Relational DB | PostgreSQL | $0 | Hard requirement from schema |
+| DB hosting | Supabase free tier | $0 | 500MB DB, 50k MAU, Auth included |
+| Redis | Upstash (TLS) | $0 | Free tier, managed, no VM ops overhead |
+| Media storage | Supabase Storage | $0 | Integrated with DB/Auth, 1GB free, sufficient for MVP |
 | Push notifications | Expo Push + FCM/APNs | $0 | One API call, handles both platforms |
 | Auth | Supabase Auth | $0 | Integrated with Supabase DB, JWT, sessions |
 | Real-time leaderboard | HTTP polling (MVP) | $0 | Every 5s during Pulse window — no WebSocket complexity until needed |
@@ -484,8 +484,8 @@ HEAT_DECAY_HALF_LIFE_HOURS=6
 
 | Tool | Why not |
 |---|---|
-| Railway | $5/month minimum even on Hobby plan. Fly.io free tier covers the same workload at $0. Switch to Railway only if Fly.io proves insufficient. |
-| Upstash Redis | 10k commands/day free limit is too low for even a small Pulse event. Redis bundled on Fly.io VM is unlimited within the VM's RAM. |
+| Fly.io | Replaced by Railway — Railway's GitHub auto-deploy and simpler config outweighed the cost savings at MVP scale. |
+| Cloudflare R2 | Replaced by Supabase Storage — already integrated with Supabase Auth and DB, avoids a separate S3-compatible setup. Supabase Storage is sufficient for MVP. |
 | AWS directly | Too much configuration overhead for guerilla development and not free. Supabase + Fly.io + Cloudflare R2 gives equivalent capability at $0. |
 | GraphQL | REST is simpler to build and debug for a known schema. Adds complexity without benefit. |
 | WebSockets (Phase 1) | HTTP polling every 5 seconds is sufficient for the MVP Pulse window. WebSockets add connection management complexity that is not warranted at small scale. Add them in Phase 2. |
