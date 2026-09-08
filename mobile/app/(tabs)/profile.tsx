@@ -124,6 +124,24 @@ export default function ProfileScreen() {
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Top bar */}
+        <View style={styles.topBar}>
+          <Text style={styles.topBarWordmark}>SÖSH</Text>
+          <View style={styles.topBarIcons}>
+            <TouchableOpacity style={styles.topBarIcon} onPress={() => router.push('/dm')}>
+              <Text style={styles.topBarIconText}>✉</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.topBarIcon} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
+              <Text style={styles.topBarIconText}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Profile header */}
         <View style={[styles.profileHeader, user?.accent_color && { borderLeftWidth: 3, borderLeftColor: user.accent_color, paddingLeft: 13 }]}>
           <TouchableOpacity style={[styles.avatar, user?.accent_color && { borderColor: user.accent_color }]} onPress={pickAndUploadAvatar} activeOpacity={0.8}>
@@ -148,27 +166,18 @@ export default function ProfileScreen() {
             {user?.city && <Text style={styles.location}>{user.city}</Text>}
             {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.notifBtn} onPress={() => router.push('/dm')}>
-              <Text style={styles.notifIcon}>✉</Text>
+        </View>
+
+        {/* Profile action buttons */}
+        <View style={styles.profileBtns}>
+          <TouchableOpacity style={styles.editBtn} onPress={() => setEditVisible(true)}>
+            <Text style={styles.editBtnText}>Edit Profile</Text>
+          </TouchableOpacity>
+          {user?.is_admin && (
+            <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')}>
+              <Text style={styles.adminBtnText}>Admin</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.notifBtn} onPress={() => { setUnreadCount(0); router.push('/notifications'); }}>
-              <Text style={styles.notifIcon}>🔔</Text>
-              {unreadCount > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            {user?.is_admin && (
-              <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')}>
-                <Text style={styles.adminBtnText}>Admin</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.editBtn} onPress={() => setEditVisible(true)}>
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         {/* Score */}
@@ -724,27 +733,32 @@ function EditProfileModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  content: { padding: 20, paddingTop: 60, gap: 20, paddingBottom: 48 },
+  content: { padding: 20, paddingTop: 56, gap: 16, paddingBottom: 48 },
   center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
 
-  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden' },
-  avatarImage: { width: 64, height: 64, borderRadius: 32 },
-  avatarLetter: { fontSize: 26, fontWeight: '800', color: '#fff' },
-  avatarEditBadge: { position: 'absolute', bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  avatarEditBadgeText: { fontSize: 14, fontWeight: '800', color: '#000', lineHeight: 18 },
-  profileInfo: { flex: 1, gap: 2 },
-  displayName: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  username: { fontSize: 13, color: '#555' },
-  location: { fontSize: 13, color: '#444' },
-  headerActions: { flexDirection: 'row', gap: 8 },
-  notifBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  notifIcon: { fontSize: 20 },
-  notifBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#e63946', borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
-  notifBadgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
-  adminBtn: { backgroundColor: '#1a1a0a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#443' },
-  adminBtnText: { color: '#cc0', fontSize: 13, fontWeight: '600' },
-  editBtn: { backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  topBarWordmark: { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: 5 },
+  topBarIcons: { flexDirection: 'row', gap: 4 },
+  topBarIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  topBarIconText: { fontSize: 20 },
+
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0 },
+  avatarImage: { width: 60, height: 60, borderRadius: 30 },
+  avatarLetter: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  avatarEditBadge: { position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  avatarEditBadgeText: { fontSize: 13, fontWeight: '800', color: '#000', lineHeight: 16 },
+  profileInfo: { flex: 1, gap: 1 },
+  displayName: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  username: { fontSize: 13, color: '#666' },
+  location: { fontSize: 12, color: '#444', marginTop: 1 },
+
+  profileBtns: { flexDirection: 'row', gap: 8 },
+  notifBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#e63946', borderRadius: 7, minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
+  notifBadgeText: { fontSize: 8, fontWeight: '900', color: '#fff' },
+  adminBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#443', backgroundColor: '#0f0f00' },
+  adminBtnText: { color: '#aa9900', fontSize: 13, fontWeight: '600' },
+  editBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#333', backgroundColor: '#111' },
   editBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   scoreRow: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
