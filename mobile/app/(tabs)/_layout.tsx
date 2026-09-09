@@ -20,7 +20,7 @@ export default function TabsLayout() {
           height: 64,
         },
         tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#444',
+        tabBarInactiveTintColor: '#666',
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '700',
