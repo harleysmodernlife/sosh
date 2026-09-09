@@ -31,7 +31,7 @@ async def get_feed(
                 pe.text_content,
                 pe.media_url,
                 pe.vote_count,
-                pe.created_at::text,
+                to_char(pe.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
                 u.username,
                 u.display_name,
                 u.city,

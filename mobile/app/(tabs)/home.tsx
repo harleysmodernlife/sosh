@@ -905,7 +905,11 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap, onPress }: {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTimeAgo(isoString: string): string {
-  const diff = Date.now() - new Date(isoString).getTime();
+  if (!isoString) return '';
+  // Postgres ::text can produce "2026-01-01 12:00:00+00" — normalize to ISO 8601
+  const iso = isoString.replace(' ', 'T').replace(/\+00(:00)?$/, 'Z');
+  const diff = Date.now() - new Date(iso).getTime();
+  if (isNaN(diff)) return '';
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -1007,12 +1011,12 @@ const styles = StyleSheet.create({
   feedToggle: { flexDirection: 'row', paddingHorizontal: 20, gap: 4 },
   feedToggleBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   feedToggleBtnActive: { backgroundColor: '#fff', borderColor: '#fff' },
-  feedToggleText: { fontSize: 13, fontWeight: '700', color: '#444' },
+  feedToggleText: { fontSize: 13, fontWeight: '700', color: '#666' },
   feedToggleTextActive: { color: '#000' },
 
   quietBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#111' },
-  quietDot: { fontSize: 12, color: '#282828' },
-  quietText: { fontSize: 12, color: '#2a2a2a', fontWeight: '600', letterSpacing: 0.3 },
+  quietDot: { fontSize: 12, color: '#444' },
+  quietText: { fontSize: 12, color: '#555', fontWeight: '600', letterSpacing: 0.3 },
 
   pulseBanner: { marginHorizontal: 16, borderRadius: 16, padding: 20, gap: 10 },
   pulseBannerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -1034,7 +1038,7 @@ const styles = StyleSheet.create({
   postAvatarLetter: { fontSize: 17, fontWeight: '800', color: '#fff' },
   cardAuthorInfo: { flex: 1, gap: 1 },
   cardName: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  cardTime: { fontSize: 11, color: '#444' },
+  cardTime: { fontSize: 11, color: '#666' },
   cardImage: { width: SCREEN_WIDTH, aspectRatio: 4 / 3 },
   cardTextBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
   cardText: { fontSize: 20, color: '#fff', lineHeight: 28, fontWeight: '500' },
@@ -1043,20 +1047,20 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, gap: 20 },
   likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   repostLabel: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },
-  repostLabelText: { fontSize: 11, color: '#3a3a3a', fontWeight: '600' },
+  repostLabelText: { fontSize: 11, color: '#555', fontWeight: '600' },
   repostBtn: {},
-  repostBtnIcon: { fontSize: 18, color: '#333' },
+  repostBtnIcon: { fontSize: 18, color: '#555' },
   repostBtnIconActive: { color: '#2a9d8f' },
   bookmarkBtn: { marginLeft: 'auto' },
-  bookmarkIcon: { fontSize: 18, color: '#333' },
+  bookmarkIcon: { fontSize: 18, color: '#555' },
   bookmarkIconActive: { color: '#fff' },
   shareBtn: {},
-  shareIcon: { fontSize: 18, color: '#444', fontWeight: '700' },
-  likeIcon: { fontSize: 20, color: '#333' },
+  shareIcon: { fontSize: 18, color: '#666', fontWeight: '700' },
+  likeIcon: { fontSize: 20, color: '#555' },
   likeIconActive: { color: '#e63946' },
-  likeCount: { fontSize: 13, fontWeight: '700', color: '#333' },
+  likeCount: { fontSize: 13, fontWeight: '700', color: '#555' },
   likeCountActive: { color: '#e63946' },
-  commentIcon: { fontSize: 18, color: '#333' },
+  commentIcon: { fontSize: 18, color: '#555' },
 
   // Entry card
   entryCard: { borderBottomWidth: 1, borderBottomColor: '#111', paddingBottom: 16, marginTop: 16, gap: 10 },
@@ -1064,17 +1068,17 @@ const styles = StyleSheet.create({
   entryBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
   entryBadgePill: { backgroundColor: 'rgba(230,57,70,0.12)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(230,57,70,0.45)' },
   entryBadgePillText: { fontSize: 9, fontWeight: '900', color: '#E63946', letterSpacing: 1.5 },
-  entryBadgeCity: { fontSize: 11, color: '#555', fontWeight: '600' },
-  entryBadgeTime: { fontSize: 11, color: '#2a2a2a', marginLeft: 'auto' },
-  entryPrompt: { fontSize: 13, color: '#666', lineHeight: 19, paddingHorizontal: 16, fontStyle: 'italic' },
+  entryBadgeCity: { fontSize: 11, color: '#777', fontWeight: '600' },
+  entryBadgeTime: { fontSize: 11, color: '#666', marginLeft: 'auto' },
+  entryPrompt: { fontSize: 13, color: '#888', lineHeight: 19, paddingHorizontal: 16, fontStyle: 'italic' },
   entryFooterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
   entryAuthorBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 },
   entryAvatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0 },
   entryAvatarImg: { width: 26, height: 26, borderRadius: 13 },
   entryAvatarLetter: { fontSize: 10, fontWeight: '800', color: '#fff' },
-  entryAuthorName: { fontSize: 12, fontWeight: '600', color: '#666', flexShrink: 1 },
-  entryVoteCount: { fontSize: 12, fontWeight: '700', color: '#555', flexShrink: 0 },
-  entryShareIcon: { fontSize: 16, color: '#444' },
+  entryAuthorName: { fontSize: 12, fontWeight: '600', color: '#888', flexShrink: 1 },
+  entryVoteCount: { fontSize: 12, fontWeight: '700', color: '#777', flexShrink: 0 },
+  entryShareIcon: { fontSize: 16, color: '#666' },
   entryCta: { backgroundColor: 'rgba(230,57,70,0.1)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(230,57,70,0.4)', flexShrink: 0 },
   entryCtaText: { fontSize: 10, fontWeight: '800', color: '#E63946', letterSpacing: 0.5 },
 
@@ -1084,24 +1088,24 @@ const styles = StyleSheet.create({
   muteBtnIcon: { fontSize: 14 },
 
   postMenu: { padding: 8 },
-  postMenuDots: { fontSize: 18, color: '#444', letterSpacing: 2 },
+  postMenuDots: { fontSize: 18, color: '#666', letterSpacing: 2 },
 
   editModal: { flex: 1, backgroundColor: '#000' },
   editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
   editModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  editModalCancel: { fontSize: 15, color: '#555', width: 60 },
+  editModalCancel: { fontSize: 15, color: '#777', width: 60 },
   editModalSave: { fontSize: 15, fontWeight: '700', color: '#fff', width: 60, textAlign: 'right' },
   editModalBody: { padding: 20, gap: 20, paddingBottom: 40 },
   editModalThumb: { width: '100%', aspectRatio: 4 / 3, borderRadius: 12 },
   editModalField: { gap: 8 },
-  editModalLabel: { fontSize: 10, fontWeight: '800', color: '#444', letterSpacing: 3 },
+  editModalLabel: { fontSize: 10, fontWeight: '800', color: '#666', letterSpacing: 3 },
   editModalInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16, color: '#fff', fontSize: 16, lineHeight: 24, minHeight: 80, textAlignVertical: 'top' },
-  editModalCount: { fontSize: 11, color: '#333', textAlign: 'right' },
+  editModalCount: { fontSize: 11, color: '#555', textAlign: 'right' },
 
   emptyFeed: { alignItems: 'center', paddingTop: 48, gap: 14, paddingHorizontal: 32, paddingBottom: 40 },
-  emptyIcon: { fontSize: 40, color: '#1a1a1a' },
-  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#2a2a2a' },
-  emptyText: { fontSize: 14, color: '#222', textAlign: 'center', lineHeight: 21 },
+  emptyIcon: { fontSize: 40, color: '#333' },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#555' },
+  emptyText: { fontSize: 14, color: '#555', textAlign: 'center', lineHeight: 21 },
   emptyCompose: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, backgroundColor: '#fff' },
   emptyComposeText: { fontSize: 14, fontWeight: '700', color: '#000' },
 
