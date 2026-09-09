@@ -83,6 +83,19 @@ async def start_or_get_conversation(
     if str(body.user_id) == current_user.user_id:
         raise HTTPException(status_code=400, detail="Cannot message yourself")
 
+    # Refuse if either party has blocked the other
+    blocked = await db.execute(
+        text("""
+            SELECT 1 FROM user_blocks
+            WHERE (blocker_id = :me AND blocked_id = :them)
+               OR (blocker_id = :them AND blocked_id = :me)
+            LIMIT 1
+        """),
+        {"me": current_user.user_id, "them": str(body.user_id)},
+    )
+    if blocked.first():
+        raise HTTPException(status_code=403, detail="Cannot message this user")
+
     # Does a conversation already exist between these two users?
     existing = await db.execute(
         text("""

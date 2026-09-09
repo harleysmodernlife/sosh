@@ -5,6 +5,43 @@ Format: `[version] — date — summary`
 
 ---
 
+## [0.4.0] — 2026-09-09
+
+### Phase 1 audit — bug fixes and DB schema sync
+
+**Bug fixes**
+- `leaderboard.tsx`: `router` was missing from the `expo-router` import; tapping an entry author name crashed the app at runtime
+- `notifications.tsx`: `mention` notification type was unhandled — tapping a mention notification did nothing; now navigates to the referenced post
+- `user/[id].tsx`: tapping a post in the profile grid now navigates to `/post/[id]` (full post screen) instead of opening a broken in-page modal; all unused modal JSX, state, and styles removed
+- `dm/[id].tsx`: thread header now pre-populates the other user's name from a `name` URL param passed by `dm/index.tsx`; also removed a stale `expo-video` import that caused a 500 bundle error
+- `admin.tsx`: replaced deprecated `Clipboard` from `react-native` with `expo-clipboard` and its async `setStringAsync` API
+- `api/routers/dm.py`: blocked users could bypass the block and open a DM conversation; bidirectional block check now enforced in `start_or_get_conversation`
+
+**Database schema sync**
+
+Phase 2 API code was deployed with tables and columns that had never been migrated to production, causing 500 errors on the home feed, profile page, and all authenticated endpoints.
+
+Migration `0007_posts_phase2.sql` (applied 2026-09-09):
+- `users.website_url VARCHAR(500)` — profile website link field
+- `posts.repost_of_id UUID` — self-referential FK enabling repost support
+- `post_bookmarks (post_id, user_id)` — saved posts per user
+- `post_hashtags (post_id, tag)` — hashtag index for trending and search
+
+Migration `0008_streaks_post_media.sql` (applied 2026-09-09):
+- `users.current_streak INTEGER DEFAULT 0` — Pulse participation streak (consecutive days)
+- `users.longest_streak INTEGER DEFAULT 0` — all-time best streak
+- `post_media (post_id, media_url, media_type, position)` — ordered media items for carousel/multi-image posts
+
+**Dependency fixes**
+- `expo-haptics` was missing from `node_modules` (used in `post/[id].tsx`); installed via `npx expo install expo-haptics`
+- `expo-clipboard` added to `package.json` (~6.0.3)
+- `npx expo install --fix` run to restore SDK 51-compatible versions of transitive dependencies that were corrupted during an earlier install cycle
+
+**expo-video (investigated, not shipped)**
+Attempted to migrate all video components from `expo-av` to `expo-video`. Reverted: `expo-video` is not bundled in Expo Go SDK 51 and requires a custom EAS development build. All video rendering remains on `expo-av` (`Video`, `ResizeMode`). The `"expo-video"` plugin entry that `npx expo install` auto-added to `app.json` was also removed.
+
+---
+
 ## [0.3.0] — 2026-09-07
 
 ### Features

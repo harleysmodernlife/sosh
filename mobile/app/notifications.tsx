@@ -27,6 +27,7 @@ function notifIcon(type: string) {
   switch (type) {
     case 'like': return '♥';
     case 'comment': return '💬';
+    case 'mention': return '@';
     case 'follow': return '◈';
     case 'trophy': return '🏆';
     case 'pulse': return '⚡';
@@ -37,7 +38,7 @@ function notifIcon(type: string) {
 }
 
 function handleTap(notif: Notification) {
-  if ((notif.type === 'like' || notif.type === 'comment') && notif.post_id) {
+  if ((notif.type === 'like' || notif.type === 'comment' || notif.type === 'mention') && notif.post_id) {
     router.push(`/post/${notif.post_id}`);
   } else if (notif.type === 'follow' && notif.actor_id) {
     router.push(`/user/${notif.actor_id}`);

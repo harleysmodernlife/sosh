@@ -10,8 +10,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Clipboard,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { api } from '@/lib/api';
 import type { Pulse } from '@/lib/types';
@@ -104,7 +104,7 @@ export default function AdminScreen() {
         'Invite created',
         `Code: ${invite.code}\n\nShare this with ${invite.label ?? 'your guest'}. It expires in 30 days.`,
         [
-          { text: 'Copy code', onPress: () => Clipboard.setString(invite.code) },
+          { text: 'Copy code', onPress: () => Clipboard.setStringAsync(invite.code) },
           { text: 'OK' },
         ],
       );

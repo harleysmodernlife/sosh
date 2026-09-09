@@ -19,14 +19,42 @@ import re
 
 from auth import AuthenticatedUser, get_current_user
 from database import get_db
-from services.push import send_like_notification, send_comment_notification, send_mention_notification
+from services.push import send_like_notification, send_comment_notification, send_mention_notification, send_repost_notification
 from services.notif import create_notification
+
+# Subquery to aggregate post_media rows as a JSON array (position-ordered).
+# Returns [] for posts with no carousel items (backward compat with media_url).
+_MEDIA_ITEMS_SQ = """
+    COALESCE((
+        SELECT jsonb_agg(jsonb_build_object('url', pm.media_url, 'type', pm.media_type) ORDER BY pm.position)
+        FROM post_media pm WHERE pm.post_id = p.id
+    ), '[]'::jsonb) AS media_items
+"""
 
 
 def _extract_mentions(text: str | None) -> list[str]:
     if not text:
         return []
     return list({m.lower() for m in re.findall(r'@([a-zA-Z0-9_]+)', text)})
+
+
+def _extract_hashtags(text: str | None) -> list[str]:
+    if not text:
+        return []
+    return list({t.lower() for t in re.findall(r'#([a-zA-Z][a-zA-Z0-9_]*)', text)})[:10]
+
+
+async def _store_hashtags(db: AsyncSession, post_id: str, text_content: str | None, caption: str | None) -> None:
+    combined = ' '.join(filter(None, [text_content, caption]))
+    tags = _extract_hashtags(combined)
+    for tag in tags:
+        try:
+            await db.execute(
+                text("INSERT INTO post_hashtags (post_id, tag) VALUES (:pid, :tag) ON CONFLICT DO NOTHING"),
+                {"pid": post_id, "tag": tag},
+            )
+        except Exception:
+            pass
 
 
 async def _fire_mention_notifications(
@@ -58,10 +86,17 @@ async def _fire_mention_notifications(
 router = APIRouter()
 
 
+class MediaItemIn(BaseModel):
+    """One item in a multi-image carousel (URL is already the full public Supabase URL)."""
+    media_url: str = Field(..., max_length=1000)
+    media_type: str = Field("photo", pattern="^(photo|video)$")
+
+
 class CreatePostRequest(BaseModel):
     content_type: str = Field(..., pattern="^(text|photo|video)$")
     text_content: str | None = Field(None, max_length=500)
-    media_url: str | None = Field(None, max_length=1000)
+    media_url: str | None = Field(None, max_length=1000)   # single media (legacy)
+    media_items: list[MediaItemIn] | None = None           # carousel (takes precedence)
     caption: str | None = Field(None, max_length=200)
 
 
@@ -73,8 +108,13 @@ async def create_post(
 ):
     if body.content_type == "text" and not body.text_content:
         raise HTTPException(status_code=400, detail="text_content required for text posts")
-    if body.content_type in ("photo", "video") and not body.media_url:
-        raise HTTPException(status_code=400, detail="media_url required for photo/video posts")
+    if body.content_type in ("photo", "video") and not body.media_url and not body.media_items:
+        raise HTTPException(status_code=400, detail="media_url or media_items required for photo/video posts")
+
+    # Derive primary media_url for backward compat (first carousel item wins)
+    primary_url = body.media_url
+    if body.media_items:
+        primary_url = body.media_items[0].media_url
 
     post_id = str(uuid4())
     await db.execute(
@@ -87,18 +127,31 @@ async def create_post(
             "user_id": current_user.user_id,
             "content_type": body.content_type,
             "text_content": body.text_content,
-            "media_url": body.media_url,
+            "media_url": primary_url,
             "caption": body.caption,
         },
     )
+
+    # Insert carousel items (only when media_items provided)
+    if body.media_items:
+        for i, item in enumerate(body.media_items):
+            await db.execute(
+                text("""
+                    INSERT INTO post_media (post_id, position, media_url, media_type)
+                    VALUES (:pid, :pos, :url, :mtype)
+                """),
+                {"pid": post_id, "pos": i, "url": item.media_url, "mtype": item.media_type},
+            )
+
     await db.commit()
 
     row = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
-                   false AS viewer_has_liked
+                   false AS viewer_has_liked,
+                   {_MEDIA_ITEMS_SQ}
             FROM posts p
             JOIN users u ON u.id = p.user_id
             WHERE p.id = :id
@@ -107,10 +160,11 @@ async def create_post(
     )
     post = dict(row.mappings().first())
 
-    # Fire @mention notifications (non-fatal)
+    # Fire @mention notifications and store #hashtags (non-fatal)
     mention_text = ' '.join(filter(None, [body.text_content, body.caption]))
     actor_name = post.get("display_name") or f"@{post.get('username')}"
     await _fire_mention_notifications(db, mention_text, current_user.user_id, actor_name, post_id)
+    await _store_hashtags(db, post_id, body.text_content, body.caption)
     if mention_text:
         await db.commit()
 
@@ -124,14 +178,15 @@ async def search_posts(
     db: AsyncSession = Depends(get_db),
 ):
     rows = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    (EXISTS (
                        SELECT 1 FROM post_likes pl
                        WHERE pl.post_id = p.id AND pl.user_id = :viewer_id
-                   )) AS viewer_has_liked
+                   )) AS viewer_has_liked,
+                   {_MEDIA_ITEMS_SQ}
             FROM posts p
             JOIN users u ON u.id = p.user_id
             WHERE p.text_content ILIKE :q OR p.caption ILIKE :q
@@ -167,7 +222,8 @@ async def get_post_feed(
                    ur.display_name AS repost_original_display_name,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
                    (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
-                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted
+                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted,
+                   {_MEDIA_ITEMS_SQ}
             FROM posts p
             JOIN users u ON u.id = p.user_id
             LEFT JOIN posts orig ON orig.id = p.repost_of_id
@@ -190,12 +246,13 @@ async def get_user_posts(
     db: AsyncSession = Depends(get_db),
 ):
     rows = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
-                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
+                   {_MEDIA_ITEMS_SQ}
             FROM posts p
             JOIN users u ON u.id = p.user_id
             WHERE p.user_id = :user_id
@@ -215,12 +272,13 @@ async def get_bookmarked_posts(
     db: AsyncSession = Depends(get_db),
 ):
     rows = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
-                   TRUE AS viewer_has_bookmarked
+                   TRUE AS viewer_has_bookmarked,
+                   {_MEDIA_ITEMS_SQ}
             FROM post_bookmarks pb
             JOIN posts p ON p.id = pb.post_id
             JOIN users u ON u.id = p.user_id
@@ -233,6 +291,56 @@ async def get_bookmarked_posts(
     return [dict(r) for r in rows.mappings().all()]
 
 
+@router.get("/hashtag/{tag}")
+async def get_hashtag_posts(
+    tag: str,
+    offset: int = 0,
+    limit: int = 20,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Posts tagged with #tag, newest first."""
+    rows = await db.execute(
+        text(f"""
+            SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
+                   p.media_url, p.caption, p.like_count, p.comment_count,
+                   p.created_at::text, p.repost_of_id::text,
+                   u.username, u.display_name, u.avatar_url, u.accent_color,
+                   NULL AS repost_original_username, NULL AS repost_original_display_name,
+                   (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
+                   (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
+                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted,
+                   {_MEDIA_ITEMS_SQ}
+            FROM post_hashtags ph
+            JOIN posts p ON p.id = ph.post_id
+            JOIN users u ON u.id = p.user_id
+            WHERE ph.tag = LOWER(:tag)
+              AND p.repost_of_id IS NULL
+            ORDER BY p.created_at DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        {"tag": tag.lower(), "viewer_id": current_user.user_id, "limit": limit, "offset": offset},
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
+@router.get("/hashtags/trending")
+async def get_trending_hashtags(db: AsyncSession = Depends(get_db)):
+    """Top 20 hashtags by post count in the last 7 days."""
+    rows = await db.execute(
+        text("""
+            SELECT ph.tag, COUNT(*) AS post_count
+            FROM post_hashtags ph
+            JOIN posts p ON p.id = ph.post_id
+            WHERE p.created_at > NOW() - INTERVAL '7 days'
+            GROUP BY ph.tag
+            ORDER BY post_count DESC
+            LIMIT 20
+        """)
+    )
+    return [dict(r) for r in rows.mappings().all()]
+
+
 @router.get("/{post_id}")
 async def get_post(
     post_id: UUID,
@@ -240,7 +348,7 @@ async def get_post(
     db: AsyncSession = Depends(get_db),
 ):
     row = await db.execute(
-        text("""
+        text(f"""
             SELECT p.id::text, p.user_id::text, p.content_type, p.text_content,
                    p.media_url, p.caption, p.like_count, p.comment_count, p.created_at::text,
                    u.username, u.display_name, u.avatar_url, u.accent_color,
@@ -249,7 +357,8 @@ async def get_post(
                    ur.display_name AS repost_original_display_name,
                    (EXISTS (SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :viewer_id)) AS viewer_has_liked,
                    (EXISTS (SELECT 1 FROM post_bookmarks pb WHERE pb.post_id = p.id AND pb.user_id = :viewer_id)) AS viewer_has_bookmarked,
-                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted
+                   (EXISTS (SELECT 1 FROM posts rp WHERE rp.repost_of_id = p.id AND rp.user_id = :viewer_id)) AS viewer_has_reposted,
+                   {_MEDIA_ITEMS_SQ}
             FROM posts p
             JOIN users u ON u.id = p.user_id
             LEFT JOIN posts orig ON orig.id = p.repost_of_id
@@ -424,7 +533,25 @@ async def repost(
             "repost_of_id": str(post_id),
         },
     )
+
     await db.commit()
+
+    # Notify original author (skip self-reposts)
+    notify = await db.execute(
+        text("""
+            SELECT p.user_id::text AS author_id, u.push_token,
+                   r.display_name AS reposter_display, r.username AS reposter_username
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            JOIN users r ON r.id = :reposter_id
+            WHERE p.id = :post_id
+        """),
+        {"post_id": post_id, "reposter_id": current_user.user_id},
+    )
+    notify_row = notify.mappings().first()
+    if notify_row and notify_row["push_token"] and notify_row["author_id"] != str(current_user.user_id):
+        actor_name = notify_row["reposter_display"] or f"@{notify_row['reposter_username']}"
+        send_repost_notification(notify_row["push_token"], actor_name, str(post_id))
     return {"id": new_id}
 
 

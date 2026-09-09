@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Video, ResizeMode } from 'expo-av';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
@@ -30,14 +30,14 @@ function formatTime(iso: string) {
 }
 
 export default function DMThreadScreen() {
-  const { id: conversationId } = useLocalSearchParams<{ id: string }>();
+  const { id: conversationId, name: nameProp } = useLocalSearchParams<{ id: string; name?: string }>();
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
   const [pendingMedia, setPendingMedia] = useState<{ uri: string; type: 'image' | 'video'; mimeType: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [otherName, setOtherName] = useState('');
+  const [otherName, setOtherName] = useState(nameProp ?? '');
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -191,13 +191,14 @@ export default function DMThreadScreen() {
 }
 
 function VideoBubble({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, p => { p.loop = true; });
   return (
-    <VideoView
-      player={player}
+    <Video
+      source={{ uri }}
       style={styles.mediaBubbleVideo}
-      contentFit="cover"
-      nativeControls
+      resizeMode={ResizeMode.COVER}
+      shouldPlay
+      isLooping
+      useNativeControls
     />
   );
 }

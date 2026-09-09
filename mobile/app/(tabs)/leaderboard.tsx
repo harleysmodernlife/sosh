@@ -17,7 +17,7 @@ import {
 import { Video, ResizeMode } from 'expo-av';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { useMute } from '@/contexts/MuteContext';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';

@@ -94,7 +94,7 @@ function ConvRow({ conv }: { conv: Conversation }) {
   return (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => router.push(`/dm/${conv.conversation_id}`)}
+      onPress={() => router.push(`/dm/${conv.conversation_id}?name=${encodeURIComponent(conv.other_display_name ?? conv.other_username ?? '')}`)}
       activeOpacity={0.8}
     >
       <View style={[styles.avatar, conv.other_accent_color ? { borderColor: conv.other_accent_color } : undefined]}>

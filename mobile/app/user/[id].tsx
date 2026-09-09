@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import {
   View,
   Text,
@@ -27,8 +26,6 @@ export default function UserProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [mediaFull, setMediaFull] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -197,7 +194,8 @@ export default function UserProfileScreen() {
                 onPress={async () => {
                   try {
                     const { conversation_id } = await api.dm.startOrGet(user.id);
-                    router.push(`/dm/${conversation_id}`);
+                    const name = encodeURIComponent(user.display_name ?? user.username ?? '');
+                    router.push(`/dm/${conversation_id}?name=${name}`);
                   } catch {}
                 }}
                 activeOpacity={0.8}
@@ -272,7 +270,7 @@ export default function UserProfileScreen() {
                 <TouchableOpacity
                   key={p.id}
                   style={styles.gridCell}
-                  onPress={() => setSelectedPost(p)}
+                  onPress={() => router.push(`/post/${p.id}`)}
                   activeOpacity={0.8}
                 >
                   {p.content_type !== 'text' && p.media_url ? (
@@ -305,47 +303,6 @@ export default function UserProfileScreen() {
         </View>
       </ScrollView>
 
-      {selectedPost && (
-        <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPost(null)}>
-          <View style={styles.postModalContainer}>
-            <View style={styles.postModalHeader}>
-              <TouchableOpacity onPress={() => setSelectedPost(null)}>
-                <Text style={styles.postModalClose}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.postModalContent}>
-              {selectedPost.content_type !== 'text' && selectedPost.media_url ? (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setMediaFull(true)} style={{ position: 'relative' }}>
-                  <Image
-                    source={{ uri: selectedPost.media_url }}
-                    style={{ width: SCREEN_WIDTH - 40, aspectRatio: 4 / 3, borderRadius: 12 }}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.expandHint}>
-                    <Text style={styles.expandHintText}>⤢ Tap to expand</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : selectedPost.text_content ? (
-                <View style={styles.postModalTextBox}>
-                  <Text style={styles.postModalText}>{selectedPost.text_content}</Text>
-                </View>
-              ) : null}
-              {selectedPost.caption ? (
-                <Text style={styles.postModalCaption}>{selectedPost.caption}</Text>
-              ) : null}
-              <Text style={styles.postModalMeta}>♥ {selectedPost.like_count} likes</Text>
-            </ScrollView>
-          </View>
-        </Modal>
-      )}
-      {selectedPost?.media_url && selectedPost.content_type !== 'text' && (
-        <FullScreenMediaModal
-          visible={mediaFull}
-          uri={selectedPost.media_url}
-          type={selectedPost.content_type}
-          onClose={() => setMediaFull(false)}
-        />
-      )}
       {followList && (
         <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setFollowList(null)}>
           <View style={styles.followModalContainer}>
@@ -483,16 +440,6 @@ const styles = StyleSheet.create({
   trophyEntryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   trophyEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
 
-  // Post detail modal
-  postModalContainer: { flex: 1, backgroundColor: '#000' },
-  postModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
-  postModalClose: { fontSize: 15, color: '#555' },
-  postModalContent: { padding: 20, gap: 14, paddingBottom: 40 },
-  postModalTextBox: { backgroundColor: '#0f0f0f', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
-  postModalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
-  postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
-  postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
-
   bio: { fontSize: 13, color: '#666', lineHeight: 19, textAlign: 'center', paddingHorizontal: 20 },
   websiteLink: { fontSize: 13, color: '#5ba3e0', marginTop: 4 },
 
@@ -511,8 +458,6 @@ const styles = StyleSheet.create({
   followEmpty: { paddingTop: 60, alignItems: 'center' },
   followEmptyText: { color: '#333', fontSize: 14 },
 
-  expandHint: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  expandHintText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   notFoundText: { fontSize: 16, color: '#444' },
   backLink: { fontSize: 14, color: '#555' },
 });

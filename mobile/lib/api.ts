@@ -23,9 +23,18 @@ async function apiFetch<T>(
     headers['Authorization'] = `Bearer ${await getToken()}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch (e: any) {
+    // fetch() itself threw — almost always a network connectivity issue
+    throw new Error('No internet connection. Please check your network and try again.');
+  }
 
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('Too many requests. Please slow down and try again.');
+    }
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
@@ -170,6 +179,7 @@ export const api = {
       content_type: 'text' | 'photo' | 'video';
       text_content?: string;
       media_url?: string;
+      media_items?: { media_url: string; media_type: string }[];
       caption?: string;
     }): Promise<Post> =>
       apiFetch('/posts', { method: 'POST', body: JSON.stringify(data) }),
@@ -209,6 +219,12 @@ export const api = {
 
     bookmarked: (offset = 0, limit = 20): Promise<Post[]> =>
       apiFetch(`/posts/bookmarked?offset=${offset}&limit=${limit}`),
+
+    byHashtag: (tag: string, offset = 0, limit = 20): Promise<Post[]> =>
+      apiFetch(`/posts/hashtag/${encodeURIComponent(tag)}?offset=${offset}&limit=${limit}`),
+
+    trendingHashtags: (): Promise<{ tag: string; post_count: number }[]> =>
+      apiFetch('/posts/hashtags/trending', {}, false),
   },
 
   // ─── Comments ─────────────────────────────────────────────────────────────
@@ -265,6 +281,13 @@ export const api = {
 
     adminPosts: (): Promise<any[]> => apiFetch('/reports/admin/posts'),
     adminUsers: (): Promise<any[]> => apiFetch('/reports/admin/users'),
+  },
+
+  // ─── Link Preview ─────────────────────────────────────────────────────────
+
+  linkPreview: {
+    get: (url: string): Promise<{ url: string; title: string | null; description: string | null; image_url: string | null; site_name: string | null }> =>
+      apiFetch(`/link-preview?url=${encodeURIComponent(url)}`, {}, false),
   },
 
   // ─── Admin ────────────────────────────────────────────────────────────────

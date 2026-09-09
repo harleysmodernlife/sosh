@@ -20,6 +20,10 @@ import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { CommentsModal } from '@/components/CommentsModal';
 import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
+import { MentionText } from '@/components/MentionText';
+import { ShareViaDMModal } from '@/components/ShareViaDMModal';
+import { LinkPreviewCard, extractFirstUrl } from '@/components/LinkPreviewCard';
+import { MediaCarousel } from '@/components/MediaCarousel';
 import type { Post } from '@/lib/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -41,7 +45,10 @@ export default function PostScreen() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [commentCount, setCommentCount] = useState(0);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [reposted, setReposted] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showShareDM, setShowShareDM] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState(false);
   const [mediaFullScreen, setMediaFullScreen] = useState(false);
@@ -62,21 +69,33 @@ export default function PostScreen() {
         setLiked(p.viewer_has_liked);
         setLikeCount(p.like_count);
         setCommentCount(p.comment_count);
+        setBookmarked(p.viewer_has_bookmarked);
+        setReposted(p.viewer_has_reposted);
       })
       .catch(() => Alert.alert('Error', 'Could not load post.'))
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleShare() {
+  function handleShare() {
     if (!post) return;
-    const deepLink = `sosh://post/${post.id}`;
-    const lines: string[] = [`@${post.username} on Sösh`];
-    if (post.text_content) lines.push(post.text_content);
-    if (post.caption) lines.push(post.caption);
-    lines.push(deepLink);
-    try {
-      await Share.share({ message: lines.join('\n\n') });
-    } catch {}
+    Alert.alert('Share post', undefined, [
+      {
+        text: 'Send via DM',
+        onPress: () => setShowShareDM(true),
+      },
+      {
+        text: 'Share externally',
+        onPress: async () => {
+          const deepLink = `sosh://post/${post.id}`;
+          const lines: string[] = [`@${post.username} on Sösh`];
+          if (post.text_content) lines.push(post.text_content);
+          if (post.caption) lines.push(post.caption);
+          lines.push(deepLink);
+          try { await Share.share({ message: lines.join('\n\n') }); } catch {}
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   function showHeart() {
@@ -126,6 +145,30 @@ export default function PostScreen() {
       setLikeCount(c => c + (wasLiked ? 1 : -1));
     } finally {
       setInFlight(false);
+    }
+  }
+
+  async function toggleBookmark() {
+    if (!post) return;
+    const was = bookmarked;
+    setBookmarked(!was);
+    try {
+      if (was) await api.posts.unbookmark(post.id);
+      else await api.posts.bookmark(post.id);
+    } catch {
+      setBookmarked(was);
+    }
+  }
+
+  async function toggleRepost() {
+    if (!post) return;
+    const was = reposted;
+    setReposted(!was);
+    try {
+      if (was) await api.posts.unrepost(post.id);
+      else await api.posts.repost(post.id);
+    } catch {
+      setReposted(was);
     }
   }
 
@@ -204,11 +247,13 @@ export default function PostScreen() {
         </TouchableOpacity>
 
         <View style={styles.mediaContainer}>
-          {post.content_type !== 'text' && post.media_url ? (
-            post.content_type === 'video' ? (
+          {post.content_type !== 'text' && (post.media_items?.length > 0 || post.media_url) ? (
+            post.media_items?.length > 1 ? (
+              <MediaCarousel items={post.media_items} onPress={handleContentTap} />
+            ) : post.content_type === 'video' ? (
               <TouchableOpacity onPress={handleContentTap} activeOpacity={1} style={styles.media}>
                 <Video
-                  source={{ uri: post.media_url }}
+                  source={{ uri: post.media_items?.[0]?.url ?? post.media_url! }}
                   style={StyleSheet.absoluteFill}
                   resizeMode={ResizeMode.COVER}
                   shouldPlay
@@ -218,13 +263,13 @@ export default function PostScreen() {
               </TouchableOpacity>
             ) : (
               <Pressable onPress={handleContentTap} style={styles.media}>
-                <Image source={{ uri: post.media_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <Image source={{ uri: post.media_items?.[0]?.url ?? post.media_url! }} style={StyleSheet.absoluteFill} resizeMode="cover" />
               </Pressable>
             )
           ) : post.text_content ? (
             <Pressable onPress={handleContentTap}>
               <View style={styles.textBox}>
-                <Text style={styles.textContent}>{post.text_content}</Text>
+                <MentionText text={post.text_content} style={styles.textContent} />
               </View>
             </Pressable>
           ) : null}
@@ -238,8 +283,17 @@ export default function PostScreen() {
         </View>
 
         {post.caption ? (
-          <Text style={styles.caption}>{post.caption}</Text>
+          <MentionText text={post.caption} style={styles.caption} />
         ) : null}
+
+        {(() => {
+          const linkUrl = extractFirstUrl(post.text_content ?? post.caption ?? '');
+          return linkUrl ? (
+            <View style={styles.linkPreviewWrap}>
+              <LinkPreviewCard url={linkUrl} />
+            </View>
+          ) : null;
+        })()}
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={toggleLike} activeOpacity={0.7}>
@@ -249,6 +303,14 @@ export default function PostScreen() {
           <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)} activeOpacity={0.7}>
             <Text style={styles.actionIcon}>💬</Text>
             <Text style={styles.actionCount}>{commentCount}</Text>
+          </TouchableOpacity>
+          {post.user_id !== currentUserId && (
+            <TouchableOpacity style={styles.actionBtn} onPress={toggleRepost} activeOpacity={0.7}>
+              <Text style={[styles.actionIcon, reposted && styles.actionIconReposted]}>↻</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.actionBtn} onPress={toggleBookmark} activeOpacity={0.7}>
+            <Text style={[styles.actionIcon, bookmarked && styles.actionIconBookmarked]}>⊟</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.shareBtn]} onPress={handleShare} activeOpacity={0.7}>
             <Text style={styles.shareIcon}>↑</Text>
@@ -261,6 +323,13 @@ export default function PostScreen() {
         visible={showComments}
         onClose={() => setShowComments(false)}
         onCountChange={delta => setCommentCount(c => c + delta)}
+      />
+
+      <ShareViaDMModal
+        visible={showShareDM}
+        postId={post.id}
+        postPreview={post.text_content ?? post.caption ?? `@${post.username}'s post`}
+        onClose={() => setShowShareDM(false)}
       />
 
       {post.media_url && post.content_type !== 'text' && (
@@ -310,6 +379,7 @@ const styles = StyleSheet.create({
   textBox: { marginHorizontal: 20, backgroundColor: '#0d0d0d', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#1a1a1a' },
   textContent: { fontSize: 22, color: '#fff', lineHeight: 30, fontWeight: '500' },
   caption: { fontSize: 15, color: '#888', paddingHorizontal: 20, lineHeight: 22 },
+  linkPreviewWrap: { paddingHorizontal: 20 },
 
   actions: { flexDirection: 'row', gap: 24, paddingHorizontal: 20, paddingTop: 4, alignItems: 'center' },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -317,6 +387,8 @@ const styles = StyleSheet.create({
   shareIcon: { fontSize: 20, color: '#444', fontWeight: '700' },
   actionIcon: { fontSize: 22, color: '#333' },
   actionIconLiked: { color: '#e63946' },
+  actionIconReposted: { color: '#06D6A0' },
+  actionIconBookmarked: { color: '#F4A261' },
   actionCount: { fontSize: 14, fontWeight: '700', color: '#333' },
   actionCountLiked: { color: '#e63946' },
 });

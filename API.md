@@ -1,10 +1,10 @@
 # Sösh API Reference
 
-**Version:** 0.3.0
+**Version:** 0.4.0
 **Base URL (local):** `http://localhost:8000`
 **Base URL (production):** `https://sosh-production.up.railway.app`
 **Interactive docs:** `{base_url}/docs` (non-production only)
-**Last Updated:** 2026-09-08
+**Last Updated:** 2026-09-09
 
 ---
 
@@ -673,6 +673,72 @@ Like a post. Idempotent. Sends a push notification to the post author (excluding
 Unlike a post.
 
 **Response 204**
+
+---
+
+#### `POST /posts/{post_id}/bookmark`
+
+Save a post to your bookmarks. Idempotent.
+
+**Response 204**
+
+---
+
+#### `DELETE /posts/{post_id}/bookmark`
+
+Remove a post from your bookmarks.
+
+**Response 204**
+
+---
+
+#### `GET /posts/bookmarked`
+
+All posts you have bookmarked, newest-bookmarked first.
+
+**Query params:** `offset` (default 0), `limit` (default 20)
+
+**Response 200** — array of post objects (same shape as feed)
+
+---
+
+#### `POST /posts/{post_id}/repost`
+
+Repost an existing post to your feed. Creates a new post record with `repost_of_id` set. Idempotent (silently succeeds if already reposted).
+
+**Response 201**
+
+---
+
+#### `DELETE /posts/{post_id}/repost`
+
+Remove your repost of a post.
+
+**Response 204**
+
+---
+
+#### `GET /posts/hashtag/{tag}`
+
+All posts tagged with a given hashtag, newest first.
+
+**Query params:** `offset` (default 0), `limit` (default 20)
+
+**Response 200** — array of post objects
+
+---
+
+#### `GET /posts/hashtags/trending` — public
+
+Top 20 hashtags by post count in the last 7 days.
+
+**Response 200**
+```json
+[
+  {"tag": "sösh", "count": 14},
+  {"tag": "pulse", "count": 9}
+]
+```
 
 ---
 

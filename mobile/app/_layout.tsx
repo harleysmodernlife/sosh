@@ -9,6 +9,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { MuteProvider } from '@/contexts/MuteContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function navigateFromNotification(data: Record<string, unknown>) {
   const type = data?.type;
@@ -114,6 +115,7 @@ export default function RootLayout() {
   if (!initialized) return null;
 
   return (
+    <ErrorBoundary>
     <MuteProvider>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#000' } }}>
@@ -129,7 +131,9 @@ export default function RootLayout() {
         <Stack.Screen name="notifications" />
         <Stack.Screen name="dm/index" />
         <Stack.Screen name="dm/[id]" />
+        <Stack.Screen name="hashtag/[tag]" />
       </Stack>
     </MuteProvider>
+    </ErrorBoundary>
   );
 }

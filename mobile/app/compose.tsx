@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -18,19 +20,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
 import { compressImage } from '@/lib/compress';
 
-type MediaType = 'photo' | 'video';
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+interface PendingMedia {
+  uri: string;
+  type: 'photo' | 'video';
+  mimeType: string;
+}
 
 export default function ComposeScreen() {
   const [text, setText] = useState('');
   const [caption, setCaption] = useState('');
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<MediaType>('photo');
+  const [mediaItems, setMediaItems] = useState<PendingMedia[]>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
 
-  const hasContent = text.trim().length > 0 || mediaUri !== null;
+  const hasMedia = mediaItems.length > 0;
+  const hasContent = text.trim().length > 0 || hasMedia;
 
   async function pickFromLibrary() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -41,11 +49,16 @@ export default function ComposeScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.85,
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
     });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    setMediaUri(asset.uri);
-    setMediaType(asset.type === 'video' ? 'video' : 'photo');
+    if (result.canceled || !result.assets.length) return;
+    const picked: PendingMedia[] = result.assets.map(a => ({
+      uri: a.uri,
+      type: a.type === 'video' ? 'video' : 'photo',
+      mimeType: a.type === 'video' ? 'video/mp4' : (a.mimeType ?? 'image/jpeg'),
+    }));
+    setMediaItems(picked);
     setShowCamera(false);
     setText('');
   }
@@ -62,7 +75,6 @@ export default function ComposeScreen() {
   }
 
   async function recordVideoNative() {
-    // Use native camera app for video — expo-camera recordAsync is unreliable in Expo Go on Android
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission needed', 'Allow camera access to record video.');
@@ -74,8 +86,7 @@ export default function ComposeScreen() {
       quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;
-    setMediaUri(result.assets[0].uri);
-    setMediaType('video');
+    setMediaItems([{ uri: result.assets[0].uri, type: 'video', mimeType: 'video/mp4' }]);
     setText('');
   }
 
@@ -83,27 +94,47 @@ export default function ComposeScreen() {
     if (!cameraRef.current) return;
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
     if (photo?.uri) {
-      setMediaUri(photo.uri);
-      setMediaType('photo');
+      setMediaItems(prev => [...prev, { uri: photo.uri, type: 'photo', mimeType: 'image/jpeg' }]);
       setShowCamera(false);
       setText('');
     }
+  }
+
+  function removeItem(index: number) {
+    setMediaItems(prev => prev.filter((_, i) => i !== index));
   }
 
   async function submit() {
     if (!hasContent) return;
     setSubmitting(true);
     try {
-      if (mediaUri) {
-        const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
-        const uploadUri = mediaType === 'photo' ? await compressImage(mediaUri) : mediaUri;
-        const { upload_url, media_key } = await api.media.presign(mimeType);
-        await api.media.upload(upload_url, uploadUri, mimeType);
-        await api.posts.create({
-          content_type: mediaType,
-          media_url: media_key,
-          caption: caption.trim() || undefined,
-        });
+      if (hasMedia) {
+        // Upload all items then create post with carousel
+        const uploadedItems: { media_url: string; media_type: string }[] = [];
+        for (const item of mediaItems) {
+          const uploadUri = item.type === 'photo' ? await compressImage(item.uri) : item.uri;
+          const { upload_url, media_key } = await api.media.presign(item.mimeType);
+          await api.media.upload(upload_url, uploadUri, item.mimeType);
+          uploadedItems.push({ media_url: media_key, media_type: item.type });
+        }
+
+        const contentType = mediaItems.some(i => i.type === 'video') ? 'video' : 'photo';
+
+        if (uploadedItems.length === 1) {
+          // Single item — use legacy path for simplicity
+          await api.posts.create({
+            content_type: contentType,
+            media_url: uploadedItems[0].media_url,
+            caption: caption.trim() || undefined,
+          });
+        } else {
+          // Multi-image carousel
+          await api.posts.create({
+            content_type: contentType,
+            media_items: uploadedItems,
+            caption: caption.trim() || undefined,
+          });
+        }
       } else {
         await api.posts.create({
           content_type: 'text',
@@ -160,56 +191,69 @@ export default function ComposeScreen() {
       </View>
 
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-        {mediaUri ? (
-          <View style={styles.mediaPreview}>
-            <Image source={{ uri: mediaUri }} style={styles.previewImage} resizeMode="cover" />
-            <TouchableOpacity style={styles.removeMedia} onPress={() => setMediaUri(null)}>
-              <Text style={styles.removeMediaText}>✕</Text>
-            </TouchableOpacity>
-            {mediaType === 'video' && (
-              <View style={styles.videoBadge}>
-                <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
-              </View>
+        {hasMedia ? (
+          <>
+            {/* Media strip */}
+            <FlatList
+              data={mediaItems}
+              keyExtractor={(_, i) => String(i)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.mediaStrip}
+              renderItem={({ item, index }) => (
+                <View style={styles.mediaTile}>
+                  <Image source={{ uri: item.uri }} style={styles.mediaTileImg} resizeMode="cover" />
+                  {item.type === 'video' && (
+                    <View style={styles.videoBadge}>
+                      <Text style={styles.videoBadgeText}>▶</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity style={styles.removeTile} onPress={() => removeItem(index)}>
+                    <Text style={styles.removeTileText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+            {mediaItems.length < 10 && (
+              <TouchableOpacity style={styles.addMoreBtn} onPress={pickFromLibrary}>
+                <Text style={styles.addMoreText}>+ Add more ({mediaItems.length}/10)</Text>
+              </TouchableOpacity>
             )}
-          </View>
+            <View style={styles.captionSection}>
+              <Text style={styles.captionLabel}>CAPTION</Text>
+              <TextInput
+                style={styles.captionInput}
+                placeholder="Say something about this..."
+                placeholderTextColor="#444"
+                value={caption}
+                onChangeText={t => setCaption(t.slice(0, 300))}
+                maxLength={300}
+                multiline
+                autoFocus
+              />
+              <Text style={styles.captionCount}>{caption.length}/300</Text>
+            </View>
+          </>
         ) : (
-          <TextInput
-            style={styles.textInput}
-            placeholder="What's on your mind?"
-            placeholderTextColor="#444"
-            value={text}
-            onChangeText={t => setText(t.slice(0, 500))}
-            multiline
-            maxLength={500}
-            autoFocus
-          />
-        )}
-
-        {mediaUri && (
-          <View style={styles.captionSection}>
-            <Text style={styles.captionLabel}>CAPTION</Text>
+          <>
             <TextInput
-              style={styles.captionInput}
-              placeholder="Say something about this..."
+              style={styles.textInput}
+              placeholder="What's on your mind?"
               placeholderTextColor="#444"
-              value={caption}
-              onChangeText={t => setCaption(t.slice(0, 300))}
-              maxLength={300}
+              value={text}
+              onChangeText={t => setText(t.slice(0, 500))}
               multiline
+              maxLength={500}
               autoFocus
             />
-            <Text style={styles.captionCount}>{caption.length}/300</Text>
-          </View>
-        )}
-
-        {!mediaUri && (
-          <View style={styles.charRow}>
-            <Text style={styles.charCount}>{text.length}/500</Text>
-          </View>
+            <View style={styles.charRow}>
+              <Text style={styles.charCount}>{text.length}/500</Text>
+            </View>
+          </>
         )}
       </ScrollView>
 
-      {!mediaUri && (
+      {!hasMedia && (
         <View style={styles.toolbar}>
           <TouchableOpacity style={styles.toolBtn} onPress={openPhotoCamera}>
             <Text style={styles.toolIcon}>📷</Text>
@@ -261,20 +305,31 @@ const styles = StyleSheet.create({
   charRow: { paddingHorizontal: 20, alignItems: 'flex-end' },
   charCount: { color: '#333', fontSize: 12 },
 
-  mediaPreview: { position: 'relative' },
-  previewImage: { width: '100%', aspectRatio: 4 / 3 },
-  removeMedia: {
-    position: 'absolute', top: 12, right: 12,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  // Media strip (multi-image)
+  mediaStrip: { padding: 12, gap: 8 },
+  mediaTile: { position: 'relative', marginRight: 2 },
+  mediaTileImg: { width: 110, height: 110, borderRadius: 8 },
+  videoBadge: {
+    position: 'absolute', bottom: 6, left: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  videoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  removeTile: {
+    position: 'absolute', top: 4, right: 4,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center', alignItems: 'center',
   },
-  removeMediaText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  videoBadge: {
-    position: 'absolute', bottom: 12, left: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+  removeTileText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  addMoreBtn: {
+    marginHorizontal: 16, marginTop: 4, marginBottom: 8,
+    paddingVertical: 10, borderRadius: 10,
+    borderWidth: 1, borderColor: '#222', borderStyle: 'dashed',
+    alignItems: 'center',
   },
-  videoBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  addMoreText: { color: '#444', fontSize: 13, fontWeight: '600' },
 
   captionSection: {
     borderTopWidth: 1,

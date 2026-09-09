@@ -53,7 +53,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: 'Search',
+          title: 'Explore',
           tabBarIcon: ({ focused }) => <Icon label="◎" focused={focused} />,
         }}
       />

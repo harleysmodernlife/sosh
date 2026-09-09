@@ -185,6 +185,24 @@ def send_mention_notification(push_token: str, actor_name: str, post_id: str) ->
         pass
 
 
+def send_repost_notification(push_token: str, reposter_name: str, post_id: str) -> None:
+    """Notify a post author that someone reposted their post."""
+    try:
+        response = _client.publish(
+            PushMessage(
+                to=push_token,
+                title=f"{reposter_name} reposted you",
+                body="Your post is spreading.",
+                data={"type": "like", "post_id": post_id},  # routes to post screen
+                sound="default",
+                priority="normal",
+            )
+        )
+        response.validate_response()
+    except (DeviceNotRegisteredError, PushTicketError, PushServerError):
+        pass
+
+
 def send_winner_notification(push_token: str, city: str, pulse_id: str) -> None:
     """Notify a user that they won City Rep for their city."""
     try:

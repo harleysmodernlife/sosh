@@ -1,8 +1,8 @@
 # Sösh — Database Schema
-**Version:** 0.1
-**Status:** Locked — design phase closed 2026-09-06
+**Version:** 0.4
+**Status:** Living document — updated as migrations are applied
 **Depends on:** DESIGN.md v0.1, FLOWS.md v0.1
-**Last Updated:** 2026-09-06
+**Last Updated:** 2026-09-09
 
 ---
 
@@ -14,7 +14,7 @@
 
 ## Live Schema Addendum — tables and columns added post-design
 
-The following additions are in production but not in `0001_initial_schema.sql`. They were applied via psql or SQL Editor directly. A future `0002_social_graph.sql` migration should formalize them.
+The following additions are in production. Migrations 0002–0008 cover everything below.
 
 ### `users` — additional columns
 
@@ -22,6 +22,11 @@ The following additions are in production but not in `0001_initial_schema.sql`. 
 |--------|------|-------|
 | `push_token` | `TEXT` | Expo push token, updated on each app launch |
 | `avatar_url` | `TEXT` | Public Supabase Storage URL for profile photo |
+| `bio` | `TEXT` | Short user bio |
+| `accent_color` | `VARCHAR(7)` | Hex color from 6-color palette, e.g. `#E63946` |
+| `website_url` | `VARCHAR(500)` | Optional profile link (added migration 0007) |
+| `current_streak` | `INTEGER DEFAULT 0` | Consecutive-day Pulse participation streak (added migration 0008) |
+| `longest_streak` | `INTEGER DEFAULT 0` | All-time best streak (added migration 0008) |
 | `updated_at` | `TIMESTAMPTZ` | Set on every PATCH |
 
 The `username` column allows `NULL` (user has not completed onboarding). API gates home access until username is set.
@@ -103,6 +108,53 @@ CREATE TABLE user_roles (
     role    TEXT NOT NULL,  -- 'admin' for admin users
     PRIMARY KEY (user_id, role)
 );
+```
+
+### `posts` — additional columns (added during Phase 2)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `caption` | `TEXT` | Optional caption separate from `text_content` |
+| `like_count` | `INTEGER DEFAULT 0` | Denormalized like count |
+| `comment_count` | `INTEGER DEFAULT 0` | Denormalized comment count |
+| `repost_of_id` | `UUID REFERENCES posts(id)` | Set when this post is a repost (migration 0007) |
+
+### `post_media` — carousel/multi-image support (migration 0008)
+
+```sql
+CREATE TABLE post_media (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id    UUID        NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    media_url  TEXT        NOT NULL,
+    media_type VARCHAR(10) NOT NULL DEFAULT 'photo' CHECK (media_type IN ('photo','video')),
+    position   INTEGER     NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX post_media_post_id_idx ON post_media (post_id, position);
+```
+
+### `post_bookmarks` — saved posts (migration 0007)
+
+```sql
+CREATE TABLE post_bookmarks (
+    post_id    UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (post_id, user_id)
+);
+```
+
+### `post_hashtags` — hashtag index (migration 0007)
+
+```sql
+CREATE TABLE post_hashtags (
+    post_id    UUID        NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tag        VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (post_id, tag)
+);
+CREATE INDEX post_hashtags_tag_idx     ON post_hashtags (tag);
+CREATE INDEX post_hashtags_created_idx ON post_hashtags (created_at);
 ```
 
 ---

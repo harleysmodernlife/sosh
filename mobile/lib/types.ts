@@ -121,12 +121,18 @@ export interface MyEntry {
   rank: number;
 }
 
+export interface PostMediaItem {
+  url: string;
+  type: 'photo' | 'video';
+}
+
 export interface Post {
   id: string;
   user_id: string;
   content_type: 'text' | 'photo' | 'video';
   text_content: string | null;
   media_url: string | null;
+  media_items: PostMediaItem[];  // [] for legacy single-media posts
   caption: string | null;
   like_count: number;
   comment_count: number;

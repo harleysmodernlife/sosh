@@ -30,6 +30,10 @@ import { useCountdown } from '@/components/useCountdown';
 import { CommentsModal } from '@/components/CommentsModal';
 import { FeedSkeleton } from '@/components/Skeleton';
 import { MentionText } from '@/components/MentionText';
+import { ShareViaDMModal } from '@/components/ShareViaDMModal';
+import { ErrorRetry } from '@/components/ErrorRetry';
+import { LinkPreviewCard, extractFirstUrl } from '@/components/LinkPreviewCard';
+import { MediaCarousel } from '@/components/MediaCarousel';
 import { useMute } from '@/contexts/MuteContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -53,6 +57,7 @@ export default function HomeScreen() {
   const [postsEnd, setPostsEnd] = useState(false);
   const [entriesEnd, setEntriesEnd] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [moreLoading, setMoreLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
@@ -74,6 +79,7 @@ export default function HomeScreen() {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   async function load() {
+    setLoadError(false);
     try {
       const [p, posts, entries] = await Promise.all([
         api.pulses.active(),
@@ -90,8 +96,9 @@ export default function HomeScreen() {
       if (posts.length === 0 && entries.length === 0) {
         api.users.suggested().then(setSuggested).catch(() => {});
       }
-    } catch {}
-    finally {
+    } catch {
+      setLoadError(true);
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -184,6 +191,22 @@ export default function HomeScreen() {
           </View>
         </View>
         <FeedSkeleton />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.wordmark}>SÖSH</Text>
+          </View>
+        </View>
+        <ErrorRetry
+          message="Could not load your feed. Check your connection and try again."
+          onRetry={() => { setLoading(true); load(); }}
+        />
       </View>
     );
   }
@@ -346,6 +369,7 @@ function PostCard({
   const [bookmarked, setBookmarked] = useState(post.viewer_has_bookmarked);
   const [reposted, setReposted] = useState(post.viewer_has_reposted);
   const [showComments, setShowComments] = useState(false);
+  const [showShareDM, setShowShareDM] = useState(false);
   const [inFlight, setInFlight] = useState(false);
   const lastTapRef = useRef(0);
   const heartScale = useRef(new Animated.Value(0)).current;
@@ -375,16 +399,26 @@ function PostCard({
     lastTapRef.current = now;
   }
 
-  async function handleShare() {
-    const deepLink = `sosh://post/${post.id}`;
-    const lines: string[] = [];
-    if (post.display_name ?? post.username) lines.push(`@${post.username} on Sösh`);
-    if (post.text_content) lines.push(post.text_content);
-    if (post.caption) lines.push(post.caption);
-    lines.push(deepLink);
-    try {
-      await Share.share({ message: lines.join('\n\n') });
-    } catch {}
+  function handleShare() {
+    Alert.alert('Share post', undefined, [
+      {
+        text: 'Send via DM',
+        onPress: () => setShowShareDM(true),
+      },
+      {
+        text: 'Share externally',
+        onPress: async () => {
+          const deepLink = `sosh://post/${post.id}`;
+          const lines: string[] = [];
+          if (post.display_name ?? post.username) lines.push(`@${post.username} on Sösh`);
+          if (post.text_content) lines.push(post.text_content);
+          if (post.caption) lines.push(post.caption);
+          lines.push(deepLink);
+          try { await Share.share({ message: lines.join('\n\n') }); } catch {}
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function toggleLike() {
@@ -514,14 +548,21 @@ function PostCard({
       </TouchableOpacity>
 
       <View style={styles.cardContent}>
-        {post.content_type !== 'text' && post.media_url ? (
-          <MediaView
-            uri={post.media_url}
-            type={post.content_type}
-            style={styles.cardImage}
-            isVisible={isVisible}
-            onDoubleTap={handleDoubleTap}
-          />
+        {post.content_type !== 'text' && (post.media_items?.length > 0 || post.media_url) ? (
+          post.media_items?.length > 1 ? (
+            <MediaCarousel
+              items={post.media_items}
+              onPress={handleContentTap}
+            />
+          ) : (
+            <MediaView
+              uri={post.media_items?.[0]?.url ?? post.media_url!}
+              type={post.content_type}
+              style={styles.cardImage}
+              isVisible={isVisible}
+              onDoubleTap={handleDoubleTap}
+            />
+          )
         ) : post.text_content ? (
           <Pressable onPress={handleContentTap}>
             <View style={styles.cardTextBox}>
@@ -531,6 +572,15 @@ function PostCard({
         ) : null}
 
         {post.caption ? <Text style={styles.cardCaption} numberOfLines={3}>{post.caption}</Text> : null}
+
+        {(() => {
+          const linkUrl = extractFirstUrl(post.text_content ?? post.caption ?? '');
+          return linkUrl ? (
+            <View style={styles.cardLinkPreview}>
+              <LinkPreviewCard url={linkUrl} />
+            </View>
+          ) : null;
+        })()}
 
         <Animated.View
           pointerEvents="none"
@@ -570,6 +620,13 @@ function PostCard({
           setCommentCount(c => c + delta);
           onCommentCountChange(post.id, delta);
         }}
+      />
+
+      <ShareViaDMModal
+        visible={showShareDM}
+        postId={post.id}
+        postPreview={post.text_content ?? post.caption ?? `@${post.username}'s post`}
+        onClose={() => setShowShareDM(false)}
       />
     </View>
   );
@@ -895,6 +952,7 @@ const styles = StyleSheet.create({
   cardTextBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 12, padding: 18, borderWidth: 1, borderColor: '#1a1a1a' },
   cardText: { fontSize: 20, color: '#fff', lineHeight: 28, fontWeight: '500' },
   cardCaption: { fontSize: 14, color: '#888', paddingHorizontal: 16, lineHeight: 20 },
+  cardLinkPreview: { paddingHorizontal: 16 },
   cardActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4, gap: 20 },
   likeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   repostLabel: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },

@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import admin, dm, entries, feed, invites, media, notifications, posts, pulses, reports, trophies, users, votes
+from middleware.rate_limit import RateLimitMiddleware
+from routers import admin, dm, entries, feed, invites, link_preview, media, notifications, posts, pulses, reports, trophies, users, votes
 
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware)
 
 # v0.1 routes
 app.include_router(users.router, prefix="/users", tags=["users"])
@@ -44,6 +46,7 @@ app.include_router(posts.router, prefix="/posts", tags=["posts"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 app.include_router(dm.router, prefix="/dm", tags=["dm"])
 app.include_router(invites.router, tags=["invites"])
+app.include_router(link_preview.router, tags=["link-preview"])
 
 
 @app.get("/health")
