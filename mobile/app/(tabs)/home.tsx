@@ -34,6 +34,7 @@ import { ShareViaDMModal } from '@/components/ShareViaDMModal';
 import { ErrorRetry } from '@/components/ErrorRetry';
 import { LinkPreviewCard, extractFirstUrl } from '@/components/LinkPreviewCard';
 import { MediaCarousel } from '@/components/MediaCarousel';
+import { FullScreenMediaModal } from '@/components/FullScreenMediaModal';
 import { useMute } from '@/contexts/MuteContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -370,6 +371,7 @@ function PostCard({
   const [reposted, setReposted] = useState(post.viewer_has_reposted);
   const [showComments, setShowComments] = useState(false);
   const [showShareDM, setShowShareDM] = useState(false);
+  const [showFullScreen, setShowFullScreen] = useState(false);
   const [inFlight, setInFlight] = useState(false);
   const lastTapRef = useRef(0);
   const heartScale = useRef(new Animated.Value(0)).current;
@@ -475,24 +477,26 @@ function PostCard({
           </Text>
         </View>
       )}
-      <TouchableOpacity
-        style={styles.cardAuthor}
-        onPress={() => router.push(`/user/${post.user_id}`)}
-        activeOpacity={0.8}
-      >
-        <View style={[styles.postAvatar, post.accent_color ? { borderColor: post.accent_color } : undefined]}>
-          {post.avatar_url ? (
-            <Image source={{ uri: post.avatar_url }} style={styles.postAvatarImg} />
-          ) : (
-            <Text style={[styles.postAvatarLetter, post.accent_color ? { color: post.accent_color } : undefined]}>
-              {(post.username ?? '?')[0].toUpperCase()}
-            </Text>
-          )}
-        </View>
-        <View style={styles.cardAuthorInfo}>
-          <Text style={styles.cardName}>{post.display_name ?? `@${post.username}`}</Text>
-          <Text style={styles.cardTime}>{formatTimeAgo(post.created_at)}</Text>
-        </View>
+      <View style={styles.cardAuthor}>
+        <TouchableOpacity
+          style={styles.cardAuthorTap}
+          onPress={() => router.push(`/user/${post.user_id}`)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.postAvatar, post.accent_color ? { borderColor: post.accent_color } : undefined]}>
+            {post.avatar_url ? (
+              <Image source={{ uri: post.avatar_url }} style={styles.postAvatarImg} />
+            ) : (
+              <Text style={[styles.postAvatarLetter, post.accent_color ? { color: post.accent_color } : undefined]}>
+                {(post.username ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <View style={styles.cardAuthorInfo}>
+            <Text style={styles.cardName}>{post.display_name ?? `@${post.username}`}</Text>
+            <Text style={styles.cardTime}>{formatTimeAgo(post.created_at)}</Text>
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.postMenu}
           onPress={() => {
@@ -521,7 +525,7 @@ function PostCard({
                       { text: 'Block', style: 'destructive', onPress: async () => {
                         try {
                           await api.users.block(post.user_id);
-                          onDelete(); // reuse onDelete to remove this post from the list
+                          onDelete();
                         } catch (e: any) {
                           Alert.alert('Error', e.message);
                         }
@@ -542,10 +546,11 @@ function PostCard({
               ]);
             }
           }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.postMenuDots}>···</Text>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
 
       <View style={styles.cardContent}>
         {post.content_type !== 'text' && (post.media_items?.length > 0 || post.media_url) ? (
@@ -560,6 +565,7 @@ function PostCard({
               type={post.content_type}
               style={styles.cardImage}
               isVisible={isVisible}
+              onPress={() => setShowFullScreen(true)}
               onDoubleTap={handleDoubleTap}
             />
           )
@@ -628,6 +634,15 @@ function PostCard({
         postPreview={post.text_content ?? post.caption ?? `@${post.username}'s post`}
         onClose={() => setShowShareDM(false)}
       />
+
+      {showFullScreen && (post.media_items?.[0]?.url ?? post.media_url) && post.content_type !== 'text' && (
+        <FullScreenMediaModal
+          visible={showFullScreen}
+          uri={post.media_items?.[0]?.url ?? post.media_url!}
+          type={post.content_type}
+          onClose={() => setShowFullScreen(false)}
+        />
+      )}
     </View>
   );
 }
@@ -635,32 +650,87 @@ function PostCard({
 // ─── Pulse entry card ─────────────────────────────────────────────────────────
 
 function EntryCard({ entry, isVisible }: { entry: FeedEntry; isVisible: boolean }) {
+  const [showFullScreen, setShowFullScreen] = useState(false);
+
+  function handleShare() {
+    const lines: string[] = [`@${entry.username} on Sösh Pulse`];
+    if (entry.pulse_prompt) lines.push(`"${entry.pulse_prompt}"`);
+    if (entry.text_content) lines.push(entry.text_content);
+    lines.push(`sosh://pulse/${entry.pulse_id}`);
+    Share.share({ message: lines.join('\n\n') }).catch(() => {});
+  }
+
+  const ctaLabel =
+    entry.pulse_status === 'active' ? '⚡ Respond' :
+    entry.pulse_status === 'voting' ? '⚡ Vote Now' :
+    '⚡ Results';
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/user/${entry.user_id}`)}
-      activeOpacity={0.9}
-    >
-      <View style={styles.entryPulseRow}>
-        <Text style={styles.entryPulseLabel}>PULSE</Text>
-        {entry.pulse_city && <Text style={styles.entryPulseCity}>{entry.pulse_city}</Text>}
-        <Text style={styles.entryPulseTime}>{formatTimeAgo(entry.created_at)}</Text>
+    <View style={styles.entryCard}>
+      <View style={styles.entryLeftBar} />
+
+      <View style={styles.entryBadgeRow}>
+        <View style={styles.entryBadgePill}>
+          <Text style={styles.entryBadgePillText}>⚡ PULSE</Text>
+        </View>
+        {entry.pulse_city ? <Text style={styles.entryBadgeCity}>{entry.pulse_city}</Text> : null}
+        <Text style={styles.entryBadgeTime}>{formatTimeAgo(entry.created_at)}</Text>
       </View>
+
       <Text style={styles.entryPrompt} numberOfLines={2}>"{entry.pulse_prompt}"</Text>
 
       {entry.media_url ? (
-        <MediaView uri={entry.media_url} type={entry.content_type} style={styles.cardImage} isVisible={isVisible} />
+        <MediaView
+          uri={entry.media_url}
+          type={entry.content_type}
+          style={styles.cardImage}
+          isVisible={isVisible}
+          onPress={() => setShowFullScreen(true)}
+        />
       ) : entry.text_content ? (
         <View style={styles.cardTextBox}>
           <Text style={styles.cardText}>{entry.text_content}</Text>
         </View>
       ) : null}
 
-      <View style={styles.cardFooter}>
-        <Text style={styles.cardName}>{entry.display_name ?? `@${entry.username}`}</Text>
-        <Text style={styles.entryVotes}>▲ {entry.vote_count}</Text>
+      <View style={styles.entryFooterRow}>
+        <TouchableOpacity
+          style={styles.entryAuthorBtn}
+          onPress={() => router.push(`/user/${entry.user_id}`)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.entryAvatar, entry.accent_color ? { borderColor: entry.accent_color } : undefined]}>
+            {entry.avatar_url ? (
+              <Image source={{ uri: entry.avatar_url }} style={styles.entryAvatarImg} />
+            ) : (
+              <Text style={[styles.entryAvatarLetter, entry.accent_color ? { color: entry.accent_color } : undefined]}>
+                {(entry.username ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <Text style={styles.entryAuthorName} numberOfLines={1}>
+            {entry.display_name ?? `@${entry.username}`}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.entryVoteCount}>▲ {entry.vote_count}</Text>
+        <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
+          <Text style={styles.entryShareIcon}>↑</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.entryCta} onPress={() => router.push('/(tabs)/pulse')} activeOpacity={0.8}>
+          <Text style={styles.entryCtaText}>{ctaLabel}</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+
+      {showFullScreen && entry.media_url && entry.content_type !== 'text' && (
+        <FullScreenMediaModal
+          visible={showFullScreen}
+          uri={entry.media_url}
+          type={entry.content_type}
+          onClose={() => setShowFullScreen(false)}
+        />
+      )}
+    </View>
   );
 }
 
@@ -755,17 +825,19 @@ function EditPostModal({
 
 // ─── Shared media renderer ────────────────────────────────────────────────────
 
-function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
+function MediaView({ uri, type, style, isVisible, onDoubleTap, onPress }: {
   uri: string;
   type: string;
   style: any;
   isVisible: boolean;
   onDoubleTap?: () => void;
+  onPress?: () => void;
 }) {
   const [paused, setPaused] = useState(false);
   const { muted, toggleMute } = useMute();
   const playing = isVisible && !paused;
   const lastTapRef = useRef(0);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleVideoPress() {
     const now = Date.now();
@@ -779,8 +851,22 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
 
   function handleImageTap() {
     const now = Date.now();
-    if (onDoubleTap && now - lastTapRef.current < 300) onDoubleTap();
-    lastTapRef.current = now;
+    if (now - lastTapRef.current < 300) {
+      // Double tap
+      if (singleTapTimer.current) { clearTimeout(singleTapTimer.current); singleTapTimer.current = null; }
+      lastTapRef.current = 0;
+      if (onDoubleTap) onDoubleTap();
+    } else {
+      // First tap — wait to confirm it's not a double tap
+      lastTapRef.current = now;
+      if (onPress) {
+        if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = setTimeout(() => {
+          singleTapTimer.current = null;
+          onPress();
+        }, 280);
+      }
+    }
   }
 
   if (type === 'video') {
@@ -806,11 +892,11 @@ function MediaView({ uri, type, style, isVisible, onDoubleTap }: {
       </TouchableOpacity>
     );
   }
-  if (onDoubleTap) {
+  if (onDoubleTap || onPress) {
     return (
-      <Pressable onPress={handleImageTap} style={style}>
+      <TouchableOpacity onPress={handleImageTap} activeOpacity={1} style={style}>
         <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      </Pressable>
+      </TouchableOpacity>
     );
   }
   return <Image source={{ uri }} style={style} resizeMode="cover" />;
@@ -941,7 +1027,8 @@ const styles = StyleSheet.create({
   heartGlyph: { fontSize: 90, color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 24 },
 
   // Post card
-  cardAuthor: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
+  cardAuthor: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  cardAuthorTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   postAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden' },
   postAvatarImg: { width: 40, height: 40, borderRadius: 20 },
   postAvatarLetter: { fontSize: 17, fontWeight: '800', color: '#fff' },
@@ -972,13 +1059,24 @@ const styles = StyleSheet.create({
   commentIcon: { fontSize: 18, color: '#333' },
 
   // Entry card
-  entryPulseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
-  entryPulseLabel: { fontSize: 10, fontWeight: '800', color: '#333', letterSpacing: 2 },
-  entryPulseCity: { fontSize: 10, color: '#333', fontWeight: '600' },
-  entryPulseTime: { fontSize: 10, color: '#2a2a2a', marginLeft: 'auto' },
-  entryPrompt: { fontSize: 13, color: '#555', lineHeight: 19, paddingHorizontal: 16, fontStyle: 'italic' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 },
-  entryVotes: { fontSize: 13, fontWeight: '700', color: '#333' },
+  entryCard: { borderBottomWidth: 1, borderBottomColor: '#111', paddingBottom: 16, marginTop: 16, gap: 10 },
+  entryLeftBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#E63946', borderRadius: 1.5 },
+  entryBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
+  entryBadgePill: { backgroundColor: 'rgba(230,57,70,0.12)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(230,57,70,0.45)' },
+  entryBadgePillText: { fontSize: 9, fontWeight: '900', color: '#E63946', letterSpacing: 1.5 },
+  entryBadgeCity: { fontSize: 11, color: '#555', fontWeight: '600' },
+  entryBadgeTime: { fontSize: 11, color: '#2a2a2a', marginLeft: 'auto' },
+  entryPrompt: { fontSize: 13, color: '#666', lineHeight: 19, paddingHorizontal: 16, fontStyle: 'italic' },
+  entryFooterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
+  entryAuthorBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 },
+  entryAvatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0 },
+  entryAvatarImg: { width: 26, height: 26, borderRadius: 13 },
+  entryAvatarLetter: { fontSize: 10, fontWeight: '800', color: '#fff' },
+  entryAuthorName: { fontSize: 12, fontWeight: '600', color: '#666', flexShrink: 1 },
+  entryVoteCount: { fontSize: 12, fontWeight: '700', color: '#555', flexShrink: 0 },
+  entryShareIcon: { fontSize: 16, color: '#444' },
+  entryCta: { backgroundColor: 'rgba(230,57,70,0.1)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(230,57,70,0.4)', flexShrink: 0 },
+  entryCtaText: { fontSize: 10, fontWeight: '800', color: '#E63946', letterSpacing: 0.5 },
 
   pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   pauseIcon: { fontSize: 48, color: 'rgba(255,255,255,0.9)' },

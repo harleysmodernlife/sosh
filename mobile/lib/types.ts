@@ -97,6 +97,8 @@ export interface FeedEntry {
   username: string;
   display_name: string | null;
   city: string | null;
+  avatar_url: string | null;
+  accent_color: string | null;
   content_type: 'text' | 'photo' | 'video';
   text_content: string | null;
   media_url: string | null;
@@ -105,6 +107,7 @@ export interface FeedEntry {
   pulse_id: string;
   pulse_prompt: string;
   pulse_city: string | null;
+  pulse_status: string;
 }
 
 export interface MyEntry {

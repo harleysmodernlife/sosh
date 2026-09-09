@@ -35,9 +35,12 @@ async def get_feed(
                 u.username,
                 u.display_name,
                 u.city,
+                u.avatar_url,
+                u.accent_color,
                 p.id::text   AS pulse_id,
                 p.prompt     AS pulse_prompt,
-                p.city       AS pulse_city
+                p.city       AS pulse_city,
+                p.status     AS pulse_status
             FROM pulse_entries pe
             JOIN pulses p ON p.id = pe.pulse_id
             JOIN users u  ON u.id = pe.user_id
