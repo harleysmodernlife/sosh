@@ -267,21 +267,6 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Legal */}
-        <TouchableOpacity style={styles.legalBtn} onPress={() => router.push('/legal')}>
-          <Text style={styles.legalText}>Terms & Privacy</Text>
-        </TouchableOpacity>
-
-        {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
-
-        {/* Delete account */}
-        <TouchableOpacity style={styles.deleteBtn} onPress={confirmDeleteAccount}>
-          <Text style={styles.deleteText}>Delete Account</Text>
-        </TouchableOpacity>
-
         {/* Posts Grid */}
         {posts.length > 0 && (
           <View style={styles.section}>
@@ -380,6 +365,20 @@ export default function ProfileScreen() {
           ) : (
             trophies.map(t => <TrophyCard key={t.id} trophy={t} />)
           )}
+        </View>
+
+        {/* Footer actions */}
+        <View style={styles.footerActions}>
+          <View style={styles.footerDivider} />
+          <TouchableOpacity style={styles.footerBtn} onPress={() => router.push('/legal')}>
+            <Text style={styles.footerBtnText}>Terms & Privacy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.footerBtn} onPress={signOut}>
+            <Text style={styles.footerSignOutText}>Sign out</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.footerBtn} onPress={confirmDeleteAccount}>
+            <Text style={styles.footerDeleteText}>Delete Account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -867,8 +866,8 @@ const styles = StyleSheet.create({
   avatarEditBadgeText: { fontSize: 13, fontWeight: '800', color: '#000', lineHeight: 16 },
   profileInfo: { flex: 1, gap: 1 },
   displayName: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  username: { fontSize: 13, color: '#666' },
-  location: { fontSize: 12, color: '#444', marginTop: 1 },
+  username: { fontSize: 13, color: '#888' },
+  location: { fontSize: 12, color: '#777', marginTop: 1 },
 
   profileBtns: { flexDirection: 'row', gap: 8 },
   notifBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#e63946', borderRadius: 7, minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
@@ -888,42 +887,42 @@ const styles = StyleSheet.create({
   completenessIcon: { fontSize: 20, color: '#5ba3e0' },
   completenessText: { flex: 1, gap: 2 },
   completenessTitle: { fontSize: 14, fontWeight: '700', color: '#ccc' },
-  completenessBody: { fontSize: 12, color: '#555', lineHeight: 17 },
-  completenessArrow: { fontSize: 22, color: '#333' },
+  completenessBody: { fontSize: 12, color: '#777', lineHeight: 17 },
+  completenessArrow: { fontSize: 22, color: '#666' },
 
   scoreRow: { flexDirection: 'row', backgroundColor: '#0d0d0d', borderRadius: 16, borderWidth: 1, borderColor: '#1a1a1a', overflow: 'hidden' },
   statBox: { flex: 1, paddingVertical: 18, paddingHorizontal: 8, alignItems: 'center', gap: 4 },
   statValue: { fontSize: 28, fontWeight: '900', color: '#fff' },
-  statLabel: { fontSize: 9, fontWeight: '700', color: '#444', letterSpacing: 1.5 },
+  statLabel: { fontSize: 9, fontWeight: '700', color: '#666', letterSpacing: 1.5 },
   statDivider: { width: 1, backgroundColor: '#1a1a1a', marginVertical: 14 },
   scoreRowSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
-  scoreSmallLabel: { fontSize: 10, fontWeight: '700', color: '#333', letterSpacing: 2 },
-  scoreSmallValue: { fontSize: 16, fontWeight: '800', color: '#555' },
+  scoreSmallLabel: { fontSize: 10, fontWeight: '700', color: '#666', letterSpacing: 2 },
+  scoreSmallValue: { fontSize: 16, fontWeight: '800', color: '#888' },
   streakRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   streakIcon: { fontSize: 16 },
   streakText: { fontSize: 13, fontWeight: '700', color: '#e63946' },
 
   section: { gap: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: '#444', letterSpacing: 3 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', color: '#666', letterSpacing: 3 },
 
   emptyTrophies: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   emptyTrophyIcon: { fontSize: 40 },
-  emptyTrophyText: { fontSize: 16, color: '#444' },
-  emptyTrophyHint: { fontSize: 13, color: '#333', textAlign: 'center' },
+  emptyTrophyText: { fontSize: 16, color: '#666' },
+  emptyTrophyHint: { fontSize: 13, color: '#555', textAlign: 'center' },
 
   // My Entry cards
   entryCard: { backgroundColor: '#0d0d0d', borderRadius: 14, borderWidth: 1, borderColor: '#1a1a1a', padding: 16, gap: 12 },
   entryCardTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   entryRankBadge: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#111', borderWidth: 1, borderColor: '#222', justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   entryRankBadgeWin: { backgroundColor: '#1a1500', borderColor: '#443300' },
-  entryRank: { fontSize: 13, fontWeight: '800', color: '#555' },
+  entryRank: { fontSize: 13, fontWeight: '800', color: '#777' },
   entryRankWin: { color: '#cc9900' },
   entryMeta: { flex: 1, gap: 3 },
-  entryPrompt: { fontSize: 13, color: '#555', fontStyle: 'italic', lineHeight: 18 },
-  entryCity: { fontSize: 11, color: '#333' },
+  entryPrompt: { fontSize: 13, color: '#777', fontStyle: 'italic', lineHeight: 18 },
+  entryCity: { fontSize: 11, color: '#666' },
   entryVoteBox: { alignItems: 'center', gap: 1 },
   entryVoteCount: { fontSize: 20, fontWeight: '900', color: '#fff' },
-  entryVoteLabel: { fontSize: 9, fontWeight: '700', color: '#444', letterSpacing: 1 },
+  entryVoteLabel: { fontSize: 9, fontWeight: '700', color: '#666', letterSpacing: 1 },
   entryTextBox: { backgroundColor: '#111', borderRadius: 8, padding: 12 },
   entryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   entryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
@@ -933,36 +932,36 @@ const styles = StyleSheet.create({
   trophyEmoji: { fontSize: 28 },
   trophyMeta: { flex: 1, gap: 2 },
   trophyTitle: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  trophyDate: { fontSize: 12, color: '#555' },
-  trophyPrompt: { fontSize: 13, color: '#555', fontStyle: 'italic' },
+  trophyDate: { fontSize: 12, color: '#777' },
+  trophyPrompt: { fontSize: 13, color: '#777', fontStyle: 'italic' },
   trophyEntry: { backgroundColor: '#111', borderRadius: 8, padding: 12 },
   trophyEntryText: { fontSize: 16, color: '#ccc', lineHeight: 22 },
   trophyEntryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
 
-  legalBtn: { paddingVertical: 10, alignItems: 'center' },
-  legalText: { color: '#333', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
-  deleteBtn: { paddingVertical: 10, alignItems: 'center' },
-  deleteText: { color: '#3a1111', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
-  signOutBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a' },
-  signOutText: { color: '#444', fontSize: 14, fontWeight: '600' },
+  footerActions: { gap: 2, marginTop: 8 },
+  footerDivider: { height: 1, backgroundColor: '#111', marginBottom: 12 },
+  footerBtn: { paddingVertical: 12, alignItems: 'center' },
+  footerBtnText: { color: '#555', fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
+  footerSignOutText: { color: '#777', fontSize: 13, fontWeight: '600' },
+  footerDeleteText: { color: '#884444', fontSize: 12, fontWeight: '500' },
 
   modalContainer: { flex: 1, backgroundColor: '#000' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  modalCancel: { fontSize: 15, color: '#555' },
+  modalCancel: { fontSize: 15, color: '#777' },
   modalSave: { fontSize: 15, fontWeight: '700', color: '#fff' },
   modalFields: { padding: 20, gap: 20 },
   fieldGroup: { gap: 8 },
-  fieldLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
+  fieldLabel: { fontSize: 10, fontWeight: '700', color: '#666', letterSpacing: 3 },
   fieldInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, color: '#fff', fontSize: 16 },
-  fieldHint: { fontSize: 11, color: '#333', marginTop: 2 },
+  fieldHint: { fontSize: 11, color: '#555', marginTop: 2 },
   colorPicker: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   colorSwatch: { width: 36, height: 36, borderRadius: 18, opacity: 0.7 },
   colorSwatchActive: { opacity: 1, borderWidth: 3, borderColor: '#fff' },
 
   // Posts grid
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionAction: { fontSize: 12, fontWeight: '700', color: '#555' },
+  sectionAction: { fontSize: 12, fontWeight: '700', color: '#777' },
   postsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -20 },
   gridCell: { width: GRID_CELL, height: GRID_CELL, backgroundColor: '#0d0d0d', borderWidth: 0.5, borderColor: '#000', position: 'relative' },
   gridCellImage: { width: '100%', height: '100%' },
@@ -971,14 +970,14 @@ const styles = StyleSheet.create({
   gridVideoIcon: { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
   gridVideoIconText: { fontSize: 10, color: '#fff' },
   newPostCta: { paddingVertical: 14, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', borderStyle: 'dashed' },
-  newPostCtaText: { fontSize: 13, color: '#333', fontWeight: '600' },
+  newPostCtaText: { fontSize: 13, color: '#555', fontWeight: '600' },
   expandHint: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   expandHintText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
 
   // Post detail modal
   postModalContainer: { flex: 1, backgroundColor: '#000' },
   postModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
-  postModalClose: { fontSize: 15, color: '#555' },
+  postModalClose: { fontSize: 15, color: '#777' },
   postModalActions: { flexDirection: 'row', gap: 20 },
   postModalEdit: { fontSize: 15, color: '#fff', fontWeight: '600' },
   postModalSave: { fontSize: 15, color: '#fff', fontWeight: '700' },
@@ -988,9 +987,9 @@ const styles = StyleSheet.create({
   postModalText: { fontSize: 22, color: '#fff', lineHeight: 32, fontWeight: '500' },
   postModalEditInput: { backgroundColor: '#111', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16, color: '#fff', fontSize: 17, lineHeight: 25, minHeight: 80, textAlignVertical: 'top' },
   postModalCaptionEdit: { gap: 8 },
-  captionEditLabel: { fontSize: 10, fontWeight: '700', color: '#444', letterSpacing: 3 },
+  captionEditLabel: { fontSize: 10, fontWeight: '700', color: '#666', letterSpacing: 3 },
   postModalCaption: { fontSize: 15, color: '#888', lineHeight: 22 },
-  postModalMeta: { fontSize: 13, color: '#444', fontWeight: '600' },
+  postModalMeta: { fontSize: 13, color: '#666', fontWeight: '600' },
   postModalMetaRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
 
   bio: { fontSize: 13, color: '#666', lineHeight: 19, marginTop: 4 },
@@ -998,15 +997,15 @@ const styles = StyleSheet.create({
   followModalContainer: { flex: 1, backgroundColor: '#000' },
   followModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 24, borderBottomWidth: 1, borderBottomColor: '#111' },
   followModalTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  followModalClose: { fontSize: 15, fontWeight: '600', color: '#555' },
+  followModalClose: { fontSize: 15, fontWeight: '600', color: '#777' },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#0d0d0d' },
   followAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#222', overflow: 'hidden', flexShrink: 0 },
   followAvatarImg: { width: 44, height: 44, borderRadius: 22 },
   followAvatarLetter: { fontSize: 17, fontWeight: '800', color: '#fff' },
   followInfo: { flex: 1, gap: 2 },
   followName: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  followHandle: { fontSize: 12, color: '#555' },
-  followScore: { fontSize: 15, fontWeight: '900', color: '#333' },
+  followHandle: { fontSize: 12, color: '#777' },
+  followScore: { fontSize: 15, fontWeight: '900', color: '#666' },
   followEmpty: { paddingTop: 60, alignItems: 'center' },
-  followEmptyText: { color: '#333', fontSize: 14 },
+  followEmptyText: { color: '#555', fontSize: 14 },
 });
