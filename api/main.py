@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from middleware.rate_limit import RateLimitMiddleware
 from routers import admin, dm, entries, feed, invites, link_preview, media, notifications, posts, pulses, reports, trophies, users, votes
 
 
@@ -30,8 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RateLimitMiddleware)
-
 # v0.1 routes
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(pulses.router, prefix="/pulses", tags=["pulses"])
