@@ -36,8 +36,9 @@ export default function PulseScreen() {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [myEntry, setMyEntry] = useState<Entry | null>(null);
   const [entryCount, setEntryCount] = useState<number | null>(null);
-  const [lastResolved, setLastResolved] = useState<ResolvedPulse | null>(null);
+  const [resolvedPulses, setResolvedPulses] = useState<ResolvedPulse[]>([]);
   const [lastEntries, setLastEntries] = useState<Entry[]>([]);
+  const [pulseEntries, setPulseEntries] = useState<Entry[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -52,15 +53,15 @@ export default function PulseScreen() {
 
       const p = await api.pulses.active();
       setPulse(p);
-      if (p && p.status === 'active') {
+      if (p && (p.status === 'active' || p.status === 'voting')) {
         const ents = await api.pulses.entries(p.id);
         setEntryCount(ents.length);
+        setPulseEntries(ents.sort((a, b) => b.vote_count - a.vote_count));
       } else {
         setEntryCount(null);
-        // Load last resolved for stats card
         const resolved = await api.pulses.resolved();
+        setResolvedPulses(resolved);
         if (resolved.length > 0) {
-          setLastResolved(resolved[0]);
           const ents = await api.pulses.entries(resolved[0].id);
           setLastEntries(ents.sort((a, b) => b.vote_count - a.vote_count));
         }
@@ -82,9 +83,10 @@ export default function PulseScreen() {
     countPollRef.current = setInterval(async () => {
       try {
         const p = await api.pulses.active();
-        if (p && p.status === 'active') {
+        if (p && (p.status === 'active' || p.status === 'voting')) {
           const ents = await api.pulses.entries(p.id);
           setEntryCount(ents.length);
+          setPulseEntries(ents.sort((a, b) => b.vote_count - a.vote_count));
         }
       } catch {}
     }, 30000);
@@ -181,95 +183,126 @@ export default function PulseScreen() {
   }
 
   if (!pulse || pulse.status === 'resolved' || pulse.status === 'resolving') {
-    if (lastResolved) {
-      const myLastEntry = currentUserId ? lastEntries.find(e => e.user_id === currentUserId) : null;
-      const myLastRank = myLastEntry
-        ? lastEntries.findIndex(e => e.id === myLastEntry.id) + 1
-        : null;
-      return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.statsContent}>
-          <Text style={styles.statsWaiting}>Signal quiet.</Text>
-          <Text style={styles.statsWaitingSub}>The Pulse fires without warning.{'\n'}This is the tab to be on when it does.</Text>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsCardLabel}>LAST PULSE</Text>
-            <Text style={styles.statsCardPrompt}>"{lastResolved.prompt}"</Text>
-            {lastResolved.winner_username && (
-              <TouchableOpacity
-                style={styles.statsWinner}
-                onPress={() => lastResolved.winner_id ? router.push(`/user/${lastResolved.winner_id}`) : undefined}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.statsWinnerLabel}>WINNER</Text>
-                <View style={styles.statsWinnerRow}>
-                  <View style={[styles.statsWinnerAvatar, lastResolved.winner_accent_color ? { borderColor: lastResolved.winner_accent_color } : undefined]}>
-                    {lastResolved.winner_avatar_url ? (
-                      <Image source={{ uri: lastResolved.winner_avatar_url }} style={styles.statsWinnerAvatarImg} />
-                    ) : (
-                      <Text style={[styles.statsWinnerAvatarLetter, lastResolved.winner_accent_color ? { color: lastResolved.winner_accent_color } : undefined]}>
-                        {(lastResolved.winner_username ?? '?')[0].toUpperCase()}
-                      </Text>
-                    )}
-                  </View>
-                  <View>
-                    <Text style={styles.statsWinnerName}>
-                      {lastResolved.winner_display_name ?? `@${lastResolved.winner_username}`}
-                    </Text>
-                    {lastResolved.winner_votes != null && (
-                      <Text style={styles.statsWinnerVotes}>{lastResolved.winner_votes} votes</Text>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-            <View style={styles.statsRow}>
-              <View style={styles.statCell}>
-                <Text style={styles.statCellValue}>{lastEntries.length}</Text>
-                <Text style={styles.statCellLabel}>ENTRIES</Text>
-              </View>
-              {myLastRank !== null && (
-                <View style={styles.statCell}>
-                  <Text style={styles.statCellValue}>#{myLastRank}</Text>
-                  <Text style={styles.statCellLabel}>YOUR RANK</Text>
-                </View>
-              )}
-              {myLastEntry && (
-                <View style={styles.statCell}>
-                  <Text style={styles.statCellValue}>{myLastEntry.vote_count}</Text>
-                  <Text style={styles.statCellLabel}>YOUR VOTES</Text>
-                </View>
-              )}
-            </View>
-          </View>
-          <TouchableOpacity style={styles.seeResultsBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
-            <Text style={styles.seeResultsBtnText}>See full results →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      );
-    }
+    const lastResolved = resolvedPulses[0] ?? null;
+    const myLastEntry = currentUserId ? lastEntries.find(e => e.user_id === currentUserId) : null;
+    const myLastRank = myLastEntry
+      ? lastEntries.findIndex(e => e.id === myLastEntry.id) + 1
+      : null;
     return (
-      <View style={styles.center}>
-        <Text style={styles.noPulseIcon}>◉</Text>
-        <Text style={styles.noPulseTitle}>Signal quiet.</Text>
-        <Text style={styles.noPulseText}>The Pulse fires without warning.{'\n'}This is the tab to be on when it does.</Text>
-      </View>
+      <ScrollView style={styles.container} contentContainerStyle={styles.statsContent}>
+        <Text style={styles.statsWaiting}>Signal quiet.</Text>
+        <Text style={styles.statsWaitingSub}>The Pulse fires without warning.{'\n'}This is the tab to be on when it does.</Text>
+
+        {lastResolved ? (
+          <>
+            <View style={styles.statsCard}>
+              <Text style={styles.statsCardLabel}>LAST PULSE</Text>
+              <Text style={styles.statsCardPrompt}>"{lastResolved.prompt}"</Text>
+              {lastResolved.winner_username && (
+                <TouchableOpacity
+                  style={styles.statsWinner}
+                  onPress={() => lastResolved.winner_id ? router.push(`/user/${lastResolved.winner_id}`) : undefined}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.statsWinnerLabel}>WINNER</Text>
+                  <View style={styles.statsWinnerRow}>
+                    <View style={[styles.statsWinnerAvatar, lastResolved.winner_accent_color ? { borderColor: lastResolved.winner_accent_color } : undefined]}>
+                      {lastResolved.winner_avatar_url ? (
+                        <Image source={{ uri: lastResolved.winner_avatar_url }} style={styles.statsWinnerAvatarImg} />
+                      ) : (
+                        <Text style={[styles.statsWinnerAvatarLetter, lastResolved.winner_accent_color ? { color: lastResolved.winner_accent_color } : undefined]}>
+                          {(lastResolved.winner_username ?? '?')[0].toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View>
+                      <Text style={styles.statsWinnerName}>
+                        {lastResolved.winner_display_name ?? `@${lastResolved.winner_username}`}
+                      </Text>
+                      {lastResolved.winner_votes != null && (
+                        <Text style={styles.statsWinnerVotes}>{lastResolved.winner_votes} votes</Text>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+              <View style={styles.statsRow}>
+                <View style={styles.statCell}>
+                  <Text style={styles.statCellValue}>{lastEntries.length}</Text>
+                  <Text style={styles.statCellLabel}>ENTRIES</Text>
+                </View>
+                {myLastRank !== null && (
+                  <View style={styles.statCell}>
+                    <Text style={styles.statCellValue}>#{myLastRank}</Text>
+                    <Text style={styles.statCellLabel}>YOUR RANK</Text>
+                  </View>
+                )}
+                {myLastEntry && (
+                  <View style={styles.statCell}>
+                    <Text style={styles.statCellValue}>{myLastEntry.vote_count}</Text>
+                    <Text style={styles.statCellLabel}>YOUR VOTES</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity style={styles.seeResultsBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
+              <Text style={styles.seeResultsBtnText}>See full results →</Text>
+            </TouchableOpacity>
+
+            {/* Top entries for last pulse */}
+            {lastEntries.length > 0 && (
+              <>
+                <Text style={styles.pastSectionLabel}>TOP ENTRIES</Text>
+                {lastEntries.slice(0, 5).map((entry, i) => (
+                  <PastEntryRow key={entry.id} entry={entry} rank={i + 1} isMe={entry.user_id === currentUserId} />
+                ))}
+              </>
+            )}
+
+            {/* Past pulses list */}
+            {resolvedPulses.length > 1 && (
+              <>
+                <Text style={styles.pastSectionLabel}>PAST PULSES</Text>
+                {resolvedPulses.slice(1).map(rp => (
+                  <PastPulseCard key={rp.id} pulse={rp} />
+                ))}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Text style={styles.noPulseIcon}>◉</Text>
+            <Text style={styles.noPulseText}>No pulses yet. First one drops soon.</Text>
+          </>
+        )}
+      </ScrollView>
     );
   }
 
   if (submitState === 'submitted' && myEntry) {
-    return <SubmittedView entry={myEntry} pulse={pulse} countdown={countdown} />;
+    return <SubmittedView entry={myEntry} pulse={pulse} countdown={countdown} entries={pulseEntries} currentUserId={currentUserId} />;
   }
 
   if (pulse.status === 'voting') {
     return (
-      <View style={styles.center}>
-        <Text style={styles.votingIcon}>🗳</Text>
-        <Text style={styles.votingTitle}>Voting is open</Text>
-        <Text style={styles.votingText}>Submissions are closed.{'\n'}Now go pick a winner.</Text>
-        {countdown && <Text style={styles.votingCountdown}>{countdown} left</Text>}
-        <TouchableOpacity style={styles.votingBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
-          <Text style={styles.votingBtnText}>See the entries →</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView style={styles.container} contentContainerStyle={styles.statsContent}>
+        <View style={styles.votingHeader}>
+          <Text style={styles.votingTitle}>🗳 Voting is open</Text>
+          {countdown && <Text style={styles.votingCountdown}>{countdown} left</Text>}
+          <TouchableOpacity style={styles.votingBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
+            <Text style={styles.votingBtnText}>Vote on the leaderboard →</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.statsCardPrompt}>"{pulse.prompt}"</Text>
+        {pulseEntries.length > 0 && (
+          <>
+            <Text style={styles.pastSectionLabel}>ALL ENTRIES ({pulseEntries.length})</Text>
+            {pulseEntries.map((entry, i) => (
+              <PastEntryRow key={entry.id} entry={entry} rank={i + 1} isMe={entry.user_id === currentUserId} />
+            ))}
+          </>
+        )}
+      </ScrollView>
     );
   }
 
@@ -417,16 +450,15 @@ function VideoPreview({ uri, onRetake }: { uri: string; onRetake: () => void }) 
   );
 }
 
-function SubmittedView({ entry, pulse, countdown }: { entry: Entry; pulse: Pulse; countdown: string | null }) {
+function SubmittedView({ entry, pulse, countdown, entries, currentUserId }: {
+  entry: Entry; pulse: Pulse; countdown: string | null;
+  entries: Entry[]; currentUserId: string | null;
+}) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.submittedContent}>
       <Text style={styles.submittedTitle}>You're in.</Text>
-      <Text style={styles.submittedSub}>
-        Voting opens when the submission window closes.
-      </Text>
-      {countdown && (
-        <Text style={styles.submittedCountdown}>{countdown} remaining</Text>
-      )}
+      <Text style={styles.submittedSub}>Voting opens when the submission window closes.</Text>
+      {countdown && <Text style={styles.submittedCountdown}>{countdown} remaining</Text>}
       <View style={styles.myEntryCard}>
         <Text style={styles.myEntryLabel}>YOUR ENTRY</Text>
         {entry.text_content ? (
@@ -442,7 +474,82 @@ function SubmittedView({ entry, pulse, countdown }: { entry: Entry; pulse: Pulse
       <TouchableOpacity style={styles.watchBoardBtn} onPress={() => router.push('/(tabs)/leaderboard')}>
         <Text style={styles.watchBoardBtnText}>Watch the rankings →</Text>
       </TouchableOpacity>
+      {entries.length > 1 && (
+        <>
+          <Text style={styles.pastSectionLabel}>WHO ELSE IS IN ({entries.length})</Text>
+          {entries.filter(e => e.id !== entry.id).map((e, i) => (
+            <PastEntryRow key={e.id} entry={e} rank={i + 1} isMe={false} />
+          ))}
+        </>
+      )}
     </ScrollView>
+  );
+}
+
+function PastEntryRow({ entry, rank, isMe }: { entry: Entry; rank: number; isMe: boolean }) {
+  return (
+    <TouchableOpacity
+      style={styles.pastEntryRow}
+      onPress={() => router.push(`/user/${entry.user_id}`)}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.pastEntryRank}>#{rank}</Text>
+      <View style={[styles.pastEntryAvatar, entry.accent_color ? { borderColor: entry.accent_color } : undefined]}>
+        {entry.avatar_url ? (
+          <Image source={{ uri: entry.avatar_url }} style={styles.pastEntryAvatarImg} />
+        ) : (
+          <Text style={[styles.pastEntryAvatarLetter, entry.accent_color ? { color: entry.accent_color } : undefined]}>
+            {(entry.username ?? '?')[0].toUpperCase()}
+          </Text>
+        )}
+      </View>
+      <View style={styles.pastEntryMeta}>
+        <Text style={styles.pastEntryName} numberOfLines={1}>
+          {entry.display_name ?? `@${entry.username}`}{isMe ? '  YOU' : ''}
+        </Text>
+        {entry.text_content ? (
+          <Text style={styles.pastEntryContent} numberOfLines={2}>{entry.text_content}</Text>
+        ) : entry.content_type === 'photo' ? (
+          <Text style={styles.pastEntryContentType}>📷 Photo</Text>
+        ) : entry.content_type === 'video' ? (
+          <Text style={styles.pastEntryContentType}>🎥 Video</Text>
+        ) : null}
+      </View>
+      {entry.vote_count > 0 && (
+        <Text style={styles.pastEntryVotes}>▲ {entry.vote_count}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function PastPulseCard({ pulse }: { pulse: ResolvedPulse }) {
+  return (
+    <View style={styles.pastPulseCard}>
+      <Text style={styles.pastPulsePrompt} numberOfLines={2}>"{pulse.prompt}"</Text>
+      {pulse.winner_username && (
+        <TouchableOpacity
+          style={styles.pastPulseWinner}
+          onPress={() => pulse.winner_id ? router.push(`/user/${pulse.winner_id}`) : undefined}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.pastPulseAvatar, pulse.winner_accent_color ? { borderColor: pulse.winner_accent_color } : undefined]}>
+            {pulse.winner_avatar_url ? (
+              <Image source={{ uri: pulse.winner_avatar_url }} style={styles.pastEntryAvatarImg} />
+            ) : (
+              <Text style={[styles.pastEntryAvatarLetter, pulse.winner_accent_color ? { color: pulse.winner_accent_color } : undefined]}>
+                {(pulse.winner_username ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <Text style={styles.pastPulseWinnerName}>
+            🏆 {pulse.winner_display_name ?? `@${pulse.winner_username}`}
+          </Text>
+          {pulse.winner_votes != null && (
+            <Text style={styles.pastPulseWinnerVotes}>{pulse.winner_votes}v</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -531,10 +638,29 @@ const styles = StyleSheet.create({
   seeResultsBtn: { alignSelf: 'center', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: '#222' },
   seeResultsBtnText: { color: '#555', fontSize: 14, fontWeight: '600' },
 
-  votingIcon: { fontSize: 48, marginBottom: 4 },
-  votingTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  votingText: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 23 },
-  votingCountdown: { fontSize: 14, color: '#ff8800', fontVariant: ['tabular-nums'], marginTop: 4 },
-  votingBtn: { marginTop: 8, backgroundColor: '#fff', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 10 },
-  votingBtnText: { color: '#000', fontWeight: '800', fontSize: 15 },
+  votingHeader: { gap: 8, alignItems: 'flex-start' },
+  votingTitle: { fontSize: 22, fontWeight: '800', color: '#fff' },
+  votingCountdown: { fontSize: 14, color: '#ff8800', fontVariant: ['tabular-nums'] },
+  votingBtn: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, marginTop: 4 },
+  votingBtnText: { color: '#000', fontWeight: '800', fontSize: 14 },
+
+  pastSectionLabel: { fontSize: 10, fontWeight: '800', color: '#444', letterSpacing: 2, marginTop: 8 },
+
+  pastEntryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111' },
+  pastEntryRank: { fontSize: 12, fontWeight: '700', color: '#444', width: 24, textAlign: 'center' },
+  pastEntryAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#333', backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  pastEntryAvatarImg: { width: '100%', height: '100%' },
+  pastEntryAvatarLetter: { fontSize: 13, fontWeight: '700', color: '#555' },
+  pastEntryMeta: { flex: 1, gap: 2 },
+  pastEntryName: { fontSize: 13, fontWeight: '700', color: '#ccc' },
+  pastEntryContent: { fontSize: 12, color: '#555', lineHeight: 17 },
+  pastEntryContentType: { fontSize: 12, color: '#444' },
+  pastEntryVotes: { fontSize: 12, fontWeight: '700', color: '#888' },
+
+  pastPulseCard: { backgroundColor: '#0d0d0d', borderRadius: 12, borderWidth: 1, borderColor: '#1a1a1a', padding: 14, gap: 10 },
+  pastPulsePrompt: { fontSize: 15, fontWeight: '600', color: '#bbb', lineHeight: 22 },
+  pastPulseWinner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pastPulseAvatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#4caf50', backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  pastPulseWinnerName: { flex: 1, fontSize: 13, fontWeight: '700', color: '#4caf50' },
+  pastPulseWinnerVotes: { fontSize: 12, color: '#2a5a2a' },
 });

@@ -31,16 +31,13 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="home"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => <Icon label="◉" focused={focused} />,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
-        name="pulse"
+        name="feed"
         options={{
-          title: 'Pulse',
-          tabBarIcon: ({ focused }) => <Icon label="⚡" focused={focused} />,
+          title: 'Feed',
+          tabBarIcon: ({ focused }) => <Icon label="◉" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -48,6 +45,15 @@ export default function TabsLayout() {
         options={{
           title: 'Votes',
           tabBarIcon: ({ focused }) => <Icon label="▲" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="pulse"
+        options={{
+          title: 'Pulse',
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 26, opacity: focused ? 1 : 0.5 }}>⚡</Text>
+          ),
         }}
       />
       <Tabs.Screen
