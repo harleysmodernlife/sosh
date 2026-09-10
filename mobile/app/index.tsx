@@ -12,6 +12,6 @@ export default function Index() {
   }, []);
 
   if (signedIn === null) return null;
-  if (signedIn) return <Redirect href="/(tabs)/home" />;
+  if (signedIn) return <Redirect href="/(tabs)/feed" />;
   return <Redirect href="/(auth)/login" />;
 }
