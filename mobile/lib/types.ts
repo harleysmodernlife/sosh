@@ -58,6 +58,8 @@ export interface Entry {
   created_at: string;
   username: string;
   display_name: string | null;
+  avatar_url: string | null;
+  accent_color: string | null;
   viewer_has_voted: boolean;
 }
 
@@ -76,6 +78,8 @@ export interface ResolvedPulse {
   winner_id: string | null;
   winner_username: string | null;
   winner_display_name: string | null;
+  winner_avatar_url: string | null;
+  winner_accent_color: string | null;
   winner_votes: number | null;
   has_mosaic: boolean;
 }

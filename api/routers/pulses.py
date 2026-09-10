@@ -46,6 +46,8 @@ async def get_resolved_pulses(db: AsyncSession = Depends(get_db)):
                    lr.user_id::text  AS winner_id,
                    u.username        AS winner_username,
                    u.display_name    AS winner_display_name,
+                   u.avatar_url      AS winner_avatar_url,
+                   u.accent_color    AS winner_accent_color,
                    lr.vote_count     AS winner_votes,
                    (m.id IS NOT NULL) AS has_mosaic
             FROM pulses p
@@ -147,7 +149,7 @@ async def get_pulse_entries(
         text("""
             SELECT pe.id, pe.user_id, pe.content_type, pe.text_content,
                    pe.media_url, pe.vote_count, pe.created_at::text,
-                   u.username, u.display_name,
+                   u.username, u.display_name, u.avatar_url, u.accent_color,
                    EXISTS(
                        SELECT 1 FROM votes v
                        WHERE v.entry_id = pe.id AND v.voter_id = :user_id

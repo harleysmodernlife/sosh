@@ -194,15 +194,32 @@ export default function PulseScreen() {
             <Text style={styles.statsCardLabel}>LAST PULSE</Text>
             <Text style={styles.statsCardPrompt}>"{lastResolved.prompt}"</Text>
             {lastResolved.winner_username && (
-              <View style={styles.statsWinner}>
+              <TouchableOpacity
+                style={styles.statsWinner}
+                onPress={() => lastResolved.winner_id ? router.push(`/user/${lastResolved.winner_id}`) : undefined}
+                activeOpacity={0.8}
+              >
                 <Text style={styles.statsWinnerLabel}>WINNER</Text>
-                <Text style={styles.statsWinnerName}>
-                  {lastResolved.winner_display_name ?? `@${lastResolved.winner_username}`}
-                </Text>
-                {lastResolved.winner_votes != null && (
-                  <Text style={styles.statsWinnerVotes}>{lastResolved.winner_votes} votes</Text>
-                )}
-              </View>
+                <View style={styles.statsWinnerRow}>
+                  <View style={[styles.statsWinnerAvatar, lastResolved.winner_accent_color ? { borderColor: lastResolved.winner_accent_color } : undefined]}>
+                    {lastResolved.winner_avatar_url ? (
+                      <Image source={{ uri: lastResolved.winner_avatar_url }} style={styles.statsWinnerAvatarImg} />
+                    ) : (
+                      <Text style={[styles.statsWinnerAvatarLetter, lastResolved.winner_accent_color ? { color: lastResolved.winner_accent_color } : undefined]}>
+                        {(lastResolved.winner_username ?? '?')[0].toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <View>
+                    <Text style={styles.statsWinnerName}>
+                      {lastResolved.winner_display_name ?? `@${lastResolved.winner_username}`}
+                    </Text>
+                    {lastResolved.winner_votes != null && (
+                      <Text style={styles.statsWinnerVotes}>{lastResolved.winner_votes} votes</Text>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
             )}
             <View style={styles.statsRow}>
               <View style={styles.statCell}>
@@ -501,6 +518,10 @@ const styles = StyleSheet.create({
   statsCardPrompt: { fontSize: 18, fontWeight: '700', color: '#ddd', lineHeight: 26 },
   statsWinner: { backgroundColor: '#0a0f0a', borderRadius: 10, padding: 14, gap: 4, borderWidth: 1, borderColor: '#1a2a1a' },
   statsWinnerLabel: { fontSize: 10, fontWeight: '800', color: '#2a5a2a', letterSpacing: 2 },
+  statsWinnerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statsWinnerAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#4caf50', backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  statsWinnerAvatarImg: { width: '100%', height: '100%' },
+  statsWinnerAvatarLetter: { fontSize: 16, fontWeight: '700', color: '#4caf50' },
   statsWinnerName: { fontSize: 18, fontWeight: '800', color: '#4caf50' },
   statsWinnerVotes: { fontSize: 13, color: '#2a5a2a' },
   statsRow: { flexDirection: 'row', gap: 12 },

@@ -300,15 +300,30 @@ function EntryCard({
         </Text>
       </View>
       <View style={styles.cardContent}>
-        <View style={styles.entryMeta}>
-          <Text style={styles.username}>
-            {entry.display_name ?? `@${entry.username}`}
-          </Text>
-          {entry.display_name && (
-            <Text style={styles.usernameHandle}>@{entry.username}</Text>
-          )}
-          {isMe && <Text style={styles.youBadge}>YOU</Text>}
-        </View>
+        <TouchableOpacity
+          style={styles.entryMeta}
+          onPress={() => router.push(`/user/${entry.user_id}`)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.entryAvatar, entry.accent_color ? { borderColor: entry.accent_color } : undefined]}>
+            {entry.avatar_url ? (
+              <Image source={{ uri: entry.avatar_url }} style={styles.entryAvatarImg} />
+            ) : (
+              <Text style={[styles.entryAvatarLetter, entry.accent_color ? { color: entry.accent_color } : undefined]}>
+                {(entry.username ?? '?')[0].toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <View style={styles.entryMetaText}>
+            <Text style={styles.username}>
+              {entry.display_name ?? `@${entry.username}`}
+            </Text>
+            {entry.display_name && (
+              <Text style={styles.usernameHandle}>@{entry.username}</Text>
+            )}
+            {isMe && <Text style={styles.youBadge}>YOU</Text>}
+          </View>
+        </TouchableOpacity>
         {entry.text_content ? (
           <Text style={styles.entryText}>{entry.text_content}</Text>
         ) : entry.media_url ? (
@@ -524,9 +539,13 @@ const styles = StyleSheet.create({
   rankNum: { fontSize: 13, fontWeight: '800', color: '#3a3a3a' },
   rankNumFirst: { color: '#cc0', fontSize: 16 },
   cardContent: { flex: 1, padding: 14, gap: 6 },
-  entryMeta: { gap: 1 },
+  entryMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  entryAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333', overflow: 'hidden', flexShrink: 0 },
+  entryAvatarImg: { width: 32, height: 32, borderRadius: 16 },
+  entryAvatarLetter: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  entryMetaText: { flex: 1, gap: 1 },
   username: { fontSize: 13, color: '#ccc', fontWeight: '700' },
-  usernameHandle: { fontSize: 11, color: '#444' },
+  usernameHandle: { fontSize: 11, color: '#666' },
   youBadge: { fontSize: 10, fontWeight: '900', color: '#5ba3e0', letterSpacing: 1, marginTop: 2 },
   entryText: { fontSize: 16, color: '#ddd', lineHeight: 23 },
   entryImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8 },
